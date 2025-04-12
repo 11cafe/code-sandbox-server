@@ -25,4 +25,13 @@ npm run build
 npm start
 ```
 
-The server will be running on http://localhost:3000 
+The server will be running on http://localhost:3000
+
+## GCP VM Setup
+
+create sandboxes mount dir
+
+```
+sudo mkdir -p /data/workspaces
+sudo chmod 777 /data/workspaces
+```

@@ -51,7 +51,7 @@ const createSandboxSchema = z.object({
 
 app.post('/api/tools/create_sandbox', 
   validateSchema(createSandboxSchema),
-  validateAuth,
+  // validateAuth,
   async (req: Request<{},{}, z.infer<typeof createSandboxSchema>>, res: Response) => {
     const sandboxId = await dockerService.createContainer();
 
