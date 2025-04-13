@@ -23,7 +23,7 @@ app.get("/", (req, res) => {
 // const PROCESS_TIMEOUT_MS = 10 * 1000; // 10 seconds timeout
 const PROCESS_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes timeout
 app.post(
-  "/api/command",
+  "/execute_command",
   (
     req: Request<{}, {}, { command: string; timeout?: number }>,
     res: Response
@@ -49,6 +49,7 @@ app.post(
     res.setHeader("Content-Type", "text/plain");
     res.setHeader("Transfer-Encoding", "chunked");
 
+    // TODO: support interactive command
     // Use shell to properly interpret the command
     const execProcess = spawn(command, [], {
       shell: true,

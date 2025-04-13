@@ -1,16 +1,20 @@
-import express, { Request, Response, NextFunction } from "express";
+import express, {
+  Request,
+  Response as ExpressResponse,
+  NextFunction,
+} from "express";
 import { z } from "zod";
 import { DockerService } from "./docker-service";
 
 const app = express();
-const port = 8080;
+const port = 8888;
 
 // Middleware
 app.use(express.json());
 
 // Validation middleware
 const validateSchema = <T extends z.ZodType>(schema: T) => {
-  return (req: Request, res: Response, next: NextFunction) => {
+  return (req: Request, res: ExpressResponse, next: NextFunction) => {
     const result = schema.safeParse(req.body);
 
     if (!result.success) {
@@ -25,7 +29,11 @@ const validateSchema = <T extends z.ZodType>(schema: T) => {
     next();
   };
 };
-const validateAuth = (req: Request, res: Response, next: NextFunction) => {
+const validateAuth = (
+  req: Request,
+  res: ExpressResponse,
+  next: NextFunction
+) => {
   const authHeader = req.headers.authorization;
   if (!authHeader) {
     return res.status(401).json({ error: "Unauthorized" });
@@ -37,8 +45,8 @@ const validateAuth = (req: Request, res: Response, next: NextFunction) => {
 };
 
 // Routes
-app.get("/", (req: Request, res: Response) => {
-  res.json({ message: "Welcome to the Express TypeScript server!" });
+app.get("/", (req: Request, res: ExpressResponse) => {
+  res.json({ message: "Welcome to container manager!" });
 });
 
 const dockerService = new DockerService();
@@ -55,7 +63,7 @@ app.post(
   // validateAuth,
   async (
     req: Request<{}, {}, z.infer<typeof createSandboxSchema>>,
-    res: Response
+    res: ExpressResponse
   ) => {
     const sandboxId = await dockerService.createContainer();
 
@@ -72,10 +80,10 @@ const writeFileSchema = z.object({
 app.post(
   "/api/tools/write_file",
   validateSchema(writeFileSchema),
-  (req: Request, res: Response) => {
+  (req: Request, res: ExpressResponse) => {
     // Body is now validated and typed
     const { path, content, sandbox_id } = req.body;
-    res.json({ message: "Welcome to the Express TypeScript server!" });
+    res.json({ message: "Welcome to container manager!" });
   }
 );
 
@@ -87,39 +95,89 @@ const readFileSchema = z.object({
 app.post(
   "/api/tools/read_file",
   validateSchema(readFileSchema),
-  (req: Request, res: Response) => {
+  (req: Request, res: ExpressResponse) => {
     // Body is now validated and typed
     const { path, sandbox_id } = req.body;
     res.json({ message: "Welcome to the Express TypeScript server!" });
   }
 );
 
-// app.post("/api/tools/execute_command", async (req, res) => {
-//   try {
-//     const { command, sandbox_id } = req.body;
+const executeCommandSchema = z.object({
+  command: z.string().min(1, "Command is required"),
+  sandbox_id: z.string().min(1, "Sandbox ID is required"),
+  timeout: z.number().optional(),
+});
+app.post(
+  "/api/tools/execute_command",
+  validateSchema(executeCommandSchema),
+  async (
+    req: Request<{}, {}, z.infer<typeof executeCommandSchema>>,
+    res: ExpressResponse
+  ) => {
+    const { command, sandbox_id, timeout } = req.body;
 
-//     // Set appropriate headers for streaming
-//     res.setHeader("Content-Type", "application/json");
-//     res.setHeader("Transfer-Encoding", "chunked");
+    const port = dockerService.portManager.getPort(sandbox_id);
+    if (!port) {
+      res.status(404).json({ error: "Sandbox not found" });
+      return;
+    }
 
-//     const stream = await dockerService.executeCommand(sandbox_id, command);
+    async function tryExecuteCommand(port: number): Promise<Response> {
+      const response = await fetch(`http://localhost:${port}/execute_command`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ command, timeout }),
+      });
 
-//     // Pipe the stream directly to response
-//     stream.pipe(res);
+      return response;
+    }
 
-//     // Handle stream errors
-//     stream.on("error", (error) => {
-//       console.error(`Stream error: ${error}`);
-//       if (!res.headersSent) {
-//         res.status(500).json({ error: "Stream error occurred" });
-//       }
-//       res.end();
-//     });
-//   } catch (error) {
-//     console.error(`Execute error: ${error}`);
-//     res.status(500).json({ error: error.message });
-//   }
-// });
+    // First attempt to get stream
+    let response = await tryExecuteCommand(port);
+    if (!response.ok) {
+      // cannot reach to commander server, try to resume container
+      try {
+        await dockerService.resumeContainer(sandbox_id);
+      } catch (error) {
+        res.status(500).json({ error: "Failed to resume container" });
+        return;
+      }
+      // retry
+      response = await tryExecuteCommand(port);
+      if (!response.ok) {
+        res.status(500).json({ error: "Failed to connect to container" });
+        return;
+      }
+    }
+
+    // Set appropriate headers for streaming
+    res.setHeader("Content-Type", "text/plain");
+    res.setHeader("Transfer-Encoding", "chunked");
+
+    // Get the readable stream from the response
+    const reader = response.body?.getReader();
+    if (!reader) {
+      res.status(500).json({ error: "Failed to get reader to stream" });
+      return;
+    }
+
+    // Read the stream chunks and forward them to the client
+    while (true) {
+      const { done, value } = await reader.read();
+
+      if (done) {
+        break;
+      }
+
+      // Forward the chunk to the client
+      res.write(value);
+    }
+
+    res.end();
+  }
+);
 
 // Start server
 app
@@ -127,6 +185,7 @@ app
     console.log(`Server is running on port ${port}`);
   })
   .on("error", (err: NodeJS.ErrnoException) => {
+    console.error(err);
     if (err.code === "EACCES") {
       console.error(
         `Port ${port} requires elevated privileges. Please run with sudo or use a port above 1024.`
