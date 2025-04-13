@@ -1,0 +1,43 @@
+FROM nginx:latest
+
+# Install necessary tools and Node.js
+RUN apt-get update && apt-get install -y \
+    curl \
+    jq \
+    && curl -fsSL https://deb.nodesource.com/setup_22.x | bash - \
+    && apt-get install -y nodejs \
+    && rm -rf /var/lib/apt/lists/*
+
+# Create directory for dynamic configs
+RUN mkdir -p /etc/nginx/conf.d/dynamic
+
+# Create app directory
+WORKDIR /app
+
+# Copy package files
+COPY package*.json ./
+
+# Install dependencies
+RUN npm install
+
+# Copy application files
+COPY . .
+
+# Copy the base nginx config
+COPY nginx.conf /etc/nginx/nginx.conf
+
+# Copy the script to update nginx config
+COPY update-nginx.sh /usr/local/bin/update-nginx.sh
+RUN chmod +x /usr/local/bin/update-nginx.sh
+
+# Build TypeScript
+RUN npm run build
+
+# Expose ports
+EXPOSE 80 8888
+
+# Start both nginx and Node.js server
+COPY start.sh /usr/local/bin/start.sh
+RUN chmod +x /usr/local/bin/start.sh
+
+CMD ["/usr/local/bin/start.sh"] 

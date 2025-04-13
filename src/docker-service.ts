@@ -21,9 +21,9 @@ interface PortMapping {
 }
 
 class PortManager {
-  private static readonly PORT_RANGE_START = 3001;
-  private static readonly PORT_RANGE_END = 9999;
-  private usedPorts: PortMapping = {};
+  private static readonly PORT_RANGE_START = 2001;
+  private static readonly PORT_RANGE_END = 65535;
+  usedPorts: PortMapping = {}; // containerId -> port
 
   private async isPortAvailable(port: number): Promise<boolean> {
     try {
@@ -62,10 +62,9 @@ class PortManager {
   }
 }
 
-const portManager = new PortManager();
-
 export class DockerService {
   private static BASE_IMAGE = process.env.BASE_IMAGE;
+  portManager = new PortManager();
 
   constructor() {
     if (!DockerService.BASE_IMAGE) {
@@ -87,20 +86,45 @@ export class DockerService {
 
   async stopContainer(sandboxId: string) {
     // Release the port when container is removed
-    portManager.releasePort(sandboxId);
+    this.portManager.releasePort(sandboxId);
     // ... existing container removal code ...
   }
   async resumeContainer(sandboxId: string) {
     // Resume the container
     await execAsync(`sudo docker start ${sandboxId}`);
   }
+
+  private async getContainerIP(containerId: string): Promise<string> {
+    try {
+      const { stdout } = await execAsync(
+        `sudo docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' ${containerId}`
+      );
+      return stdout.trim();
+    } catch (error) {
+      throw new Error(`Failed to get container IP: ${error}`);
+    }
+  }
+
+  private async updateNginxConfig(
+    containerId: string,
+    containerIP: string
+  ): Promise<void> {
+    try {
+      await execAsync(
+        `sudo docker exec nginx-proxy /usr/local/bin/update-nginx.sh ${containerId} ${containerIP}`
+      );
+    } catch (error) {
+      throw new Error(`Failed to update nginx config: ${error}`);
+    }
+  }
+
   async createContainer(): Promise<string> {
     const sandboxId = nanoid();
 
     const hostWorkspacePath = getContainerWorkspacePath(sandboxId);
     // Create workspace directory on host
     await fs.mkdir(hostWorkspacePath, { recursive: true });
-    const assignedPort = await portManager.allocatePort(sandboxId);
+    const assignedPort = await this.portManager.allocatePort(sandboxId);
 
     // Create workspace directory on host
     await execAsync(
@@ -113,60 +137,13 @@ export class DockerService {
         ${DockerService.BASE_IMAGE}`
     );
 
-    console.log(`🗂️Container ${sandboxId} created`);
+    // Get container IP and update nginx config
+    const containerIP = await this.getContainerIP(sandboxId);
+    await this.updateNginxConfig(sandboxId, containerIP);
+
+    console.log(`🗂️Container ${sandboxId} created with IP ${containerIP}`);
     return sandboxId;
   }
-
-  // async executeCommand(
-  //   containerId: string,
-  //   command: string
-  // ): Promise<Readable> {
-  //   const port = portManager.getPort(containerId);
-  //   if (!port) {
-  //     await this.resumeContainer(containerId);
-  //   }
-
-  //   async function tryFetchStream(port: number): Promise<Response> {
-  //     const response = await fetch(`http://localhost:${port}/execute`, {
-  //       method: "POST",
-  //       headers: {
-  //         "Content-Type": "application/json",
-  //       },
-  //       body: JSON.stringify({ command }),
-  //     });
-
-  //     if (!response.ok) {
-  //       throw new Error(`Server responded with status: ${response.status}`);
-  //     }
-
-  //     return response;
-  //   }
-
-  //   try {
-  //     // First attempt to get stream
-  //     const response = await tryFetchStream(port);
-  //     return Readable.from(response.body as ReadableStream);
-  //   } catch (error) {
-  //     // Server not responding, try to resume
-  //     try {
-  //       // Check container status
-  //       await this.resumeContainer(containerId);
-
-  //       // Try again after server restart
-  //       const response = await tryFetchStream(port);
-  //       return Readable.from(response.body);
-  //     } catch (retryError) {
-  //       // Create an error stream
-  //       const errorStream = new Readable({
-  //         read() {
-  //           this.push(JSON.stringify({ error: retryError.message }));
-  //           this.push(null);
-  //         },
-  //       });
-  //       return errorStream;
-  //     }
-  //   }
-  // }
 }
 
 export class FileService {
