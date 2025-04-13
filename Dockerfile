@@ -38,5 +38,8 @@ WORKDIR /home
 # node --version v22.14.0
 # python --version 3.12.9
 
+# Expose the port from environment variable
+EXPOSE $PORT
+
 # CMD ["/bin/bash"]
 CMD ["npx", "-y", "linux-commander@latest"]
