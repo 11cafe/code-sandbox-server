@@ -29,6 +29,7 @@ app.post(
 
     // Basic validation
     if (!command || typeof command !== "string") {
+      console.error("Invalid command", command);
       return res.status(400).json({ error: "Invalid command" });
     }
 
@@ -40,6 +41,7 @@ app.post(
     const execProcess = spawn(command, [], {
       shell: true,
       env: process.env,
+      cwd: process.cwd(),
     });
 
     // Handle client disconnect
@@ -65,7 +67,6 @@ app.post(
 
     // Handle process completion
     execProcess.on("close", (code) => {
-      res.write(`\nProcess exited with code ${code}`);
       res.end();
     });
 
