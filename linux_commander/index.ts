@@ -20,10 +20,14 @@ app.get("/", (req, res) => {
   res.json({ message: "Welcome to Linux Commander" });
 });
 
-// Update the route to handle errors
+// const PROCESS_TIMEOUT_MS = 10 * 1000; // 10 seconds timeout
+const PROCESS_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes timeout
 app.post(
   "/api/command",
-  (req: Request<{}, {}, { command: string }>, res: Response) => {
+  (
+    req: Request<{}, {}, { command: string; timeout?: number }>,
+    res: Response
+  ) => {
     // check authorization
     const API_KEY = process.env.API_KEY;
     if (API_KEY?.length) {
@@ -33,7 +37,7 @@ app.post(
       }
     }
 
-    const { command } = req.body;
+    const { command, timeout = PROCESS_TIMEOUT_MS } = req.body;
 
     // Basic validation
     if (!command || typeof command !== "string") {
@@ -51,12 +55,17 @@ app.post(
       env: process.env,
       cwd: process.cwd(),
     });
-    if (execProcess.pid) {
-      runningTerminals[execProcess.pid] = {
-        startedAt: Date.now(),
-        execProcess,
-      };
-    }
+
+    // Add timeout to kill long-running processes
+    const timeoutId = setTimeout(() => {
+      if (execProcess.pid) {
+        try {
+          execProcess.kill();
+        } catch (error) {}
+        res.write("\nError: Process timed out after 5 minutes\n");
+        res.end();
+      }
+    }, timeout);
 
     // Handle client disconnect
     req.on("close", () => {
@@ -84,13 +93,14 @@ app.post(
 
     // Handle process completion
     execProcess.on("close", (code) => {
+      clearTimeout(timeoutId);
       res.end();
     });
 
     // Handle errors
     execProcess.on("error", (err) => {
+      clearTimeout(timeoutId);
       res.write(`\nError: ${err.message}`);
-
       res.end();
     });
   }
