@@ -5,6 +5,7 @@ import { spawn } from "child_process";
 
 const app = express();
 const port = process.env.PORT || 3000;
+const runningTerminals: { [key: string]: any } = {};
 
 // Middleware for parsing JSON bodies
 app.use(express.json());
@@ -45,16 +46,14 @@ app.post(
       env: process.env,
       cwd: process.cwd(),
     });
+    if (execProcess.pid) {
+      runningTerminals[execProcess.pid] = execProcess;
+    }
 
     // Handle client disconnect
     req.on("close", () => {
-      try {
-        if (execProcess.pid) {
-          execProcess.kill(); // Use the built-in kill method instead
-        }
-      } catch (error) {
-        console.error("Error killing process:", error);
-      }
+      // cannot kill the process here, it will early exit the process resulting blank resp sometimes
+      // execProcess.kill();
     });
 
     // Stream stdout
