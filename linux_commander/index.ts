@@ -1,3 +1,5 @@
+#!/usr/bin/env node
+
 import express, { Request, Response } from "express";
 import { spawn } from "child_process";
 

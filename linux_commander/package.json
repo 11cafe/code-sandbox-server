@@ -1,13 +1,14 @@
 {
   "name": "linux-commander",
-  "version": "1.0.0",
+  "version": "0.0.5",
   "description": "Linux Commander",
   "main": "index.js",
+  "bin": "./dist/index.js",
   "type": "module",
   "scripts": {
     "start": "node index.js",
     "dev": "nodemon --exec \"node --loader ts-node/esm\" index.ts",
-    "build": "tsc",
+    "build": "tsc && node -e \"require('fs').chmodSync('dist/index.js', '755')\"",
     "watch": "tsc -w"
   },
   "dependencies": {
