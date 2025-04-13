@@ -1,11 +1,16 @@
 #!/usr/bin/env node
 
 import express, { Request, Response } from "express";
-import { spawn } from "child_process";
+import { ChildProcessWithoutNullStreams, spawn } from "child_process";
 
 const app = express();
 const port = process.env.PORT || 3000;
-const runningTerminals: { [key: string]: any } = {};
+const runningTerminals: {
+  [key: string]: {
+    startedAt: number;
+    execProcess: ChildProcessWithoutNullStreams;
+  };
+} = {};
 
 // Middleware for parsing JSON bodies
 app.use(express.json());
@@ -47,7 +52,10 @@ app.post(
       cwd: process.cwd(),
     });
     if (execProcess.pid) {
-      runningTerminals[execProcess.pid] = execProcess;
+      runningTerminals[execProcess.pid] = {
+        startedAt: Date.now(),
+        execProcess,
+      };
     }
 
     // Handle client disconnect
@@ -66,6 +74,14 @@ app.post(
       res.write(`ERROR: ${data}`);
     });
 
+    // Check if process is trying to read from TTY (interactive)
+    execProcess.stdin.on("data", () => {
+      console.log("📖reading from stdin");
+      execProcess.kill();
+      res.write("Error: Interactive commands are not supported\n");
+      res.end();
+    });
+
     // Handle process completion
     execProcess.on("close", (code) => {
       res.end();
@@ -74,6 +90,7 @@ app.post(
     // Handle errors
     execProcess.on("error", (err) => {
       res.write(`\nError: ${err.message}`);
+
       res.end();
     });
   }
