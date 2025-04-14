@@ -157,25 +157,35 @@ app.post(
 
     res.setHeader("Content-Type", "text/plain");
     res.setHeader("Transfer-Encoding", "chunked");
-    res.write("Hello, waiting for command to finish...\n");
-    // Create a listener for the pty output
+    res.write("Waiting for command to finish...\n");
 
-    // Attach the listener
+    const id = Date.now(); // or generate UUID
+    const sentinel = `__END_${id}__`;
+    const wrapped = `sh -c "${command}; echo ${sentinel}"`;
+
+    let buffer = "";
+    // because the SENTINEL would appear twice, first time when command invoked, should be ignored
+    let firstSentinelDone = false;
     const listener = ptyProcess.onData((data) => {
-      console.log("stream data", data);
       res.write(data);
+      buffer += data;
+      if (buffer.includes(sentinel)) {
+        if (!firstSentinelDone) {
+          firstSentinelDone = true;
+        } else {
+          res.end();
+          listener.dispose();
+          buffer = "";
+        }
+      }
     });
+    ptyProcess.write(`${wrapped}\r`);
 
-    // Write the command
-    setTimeout(() => {
-      ptyProcess.write(`${command}\r`);
-    }, 1000);
-    setTimeout(() => {
-      res.end();
-    }, 5000);
     // Handle client disconnect
     // req.on("close", () => {
-    //   listener.dispose();
+    //   setTimeout(() => {
+    //     listener.dispose();
+    //   }, 2000);
     // });
   }
 );

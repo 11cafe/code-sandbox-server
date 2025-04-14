@@ -124,7 +124,6 @@ export class DockerService {
     const hostWorkspacePath = getContainerWorkspacePath(sandboxId);
     // Create workspace directory on host
     await fs.mkdir(hostWorkspacePath, { recursive: true });
-    const assignedPort = await this.portManager.allocatePort(sandboxId);
 
     // Create workspace directory on host
     await execAsync(
@@ -132,8 +131,6 @@ export class DockerService {
         --name ${sandboxId} \
         -v ${hostWorkspacePath}:${CONTAINER_WORKING_DIR} \
         -w ${CONTAINER_WORKING_DIR} \
-        -e PORT=${assignedPort} \
-        -p ${assignedPort}:${assignedPort} \
         ${DockerService.BASE_IMAGE}`
     );
 
