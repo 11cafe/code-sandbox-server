@@ -79,34 +79,31 @@ app.post(
 function createTerminal(sandboxId: string) {
   const shell = "bash";
 
-  ptyProcess = pty.spawn(shell, [], {
-    name: "xterm-color",
-    cols: 80,
-    rows: 30,
-    cwd: process.env.HOME,
-    env: process.env,
-  });
+  // Directly run the container bash as the main process
+  ptyProcess = pty.spawn(
+    "sudo",
+    ["docker", "exec", "-it", sandboxId, "/bin/bash"],
+    {
+      name: "xterm-color",
+      cols: 80,
+      rows: 30,
+      cwd: process.env.HOME,
+      env: process.env,
+    }
+  );
 
-  // Pipe output to the real terminal
+  // Pipe terminal output to stdout
   ptyProcess.onData((data) => {
     process.stdout.write(data);
   });
 
   let buffer = "";
-  let inContainerShell = false;
   const cleanup = ptyProcess.onData((data) => {
     buffer += data;
-
     if (buffer.includes("$ ") || buffer.includes("# ")) {
       // Shell is ready — send the command
-      if (!inContainerShell) {
-        ptyProcess.write(`sudo docker exec -it ${sandboxId} /bin/bash\r`);
-        buffer = ""; // reset if needed
-        inContainerShell = true;
-      } else {
-        ptyProcess.write("ls / \r");
-        cleanup.dispose();
-      }
+      buffer = ""; // reset if needed
+      cleanup.dispose();
     }
   });
 }
