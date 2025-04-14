@@ -138,10 +138,10 @@ export class DockerService {
     );
 
     // Get container IP and update nginx config
-    const containerIP = await this.getContainerIP(sandboxId);
-    await this.updateNginxConfig(sandboxId, containerIP);
+    // const containerIP = await this.getContainerIP(sandboxId);
+    // await this.updateNginxConfig(sandboxId, containerIP);
 
-    console.log(`🗂️Container ${sandboxId} created with IP ${containerIP}`);
+    // console.log(`🗂️Container ${sandboxId} created with IP ${containerIP}`);
     return sandboxId;
   }
 }

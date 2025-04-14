@@ -5,6 +5,7 @@ import express, {
 } from "express";
 import { z } from "zod";
 import { DockerService } from "./docker-service";
+import * as pty from "node-pty";
 
 const app = express();
 const port = 8888;
@@ -57,6 +58,10 @@ const createSandboxSchema = z.object({
   with_file_content: z.string().optional(),
 });
 
+let ptyProcess: pty.IPty;
+
+// sudo netstat -tulpn | grep :8888
+// curl http://localhost:8888/api/tools/create_sandbox -X POST -H "Content-Type: application/json" -d '{}'
 app.post(
   "/api/tools/create_sandbox",
   validateSchema(createSandboxSchema),
@@ -66,10 +71,39 @@ app.post(
     res: ExpressResponse
   ) => {
     const sandboxId = await dockerService.createContainer();
-
+    createTerminal(sandboxId);
     res.json({ id: sandboxId });
   }
 );
+
+function createTerminal(sandboxId: string) {
+  const shell = "bash";
+
+  ptyProcess = pty.spawn(shell, [], {
+    name: "xterm-color",
+    cols: 80,
+    rows: 30,
+    cwd: process.env.HOME,
+    env: process.env,
+  });
+
+  // Pipe output to the real terminal
+  ptyProcess.onData((data) => {
+    process.stdout.write(data);
+  });
+
+  // Pipe user input to the pty process (like a real terminal)
+  process.stdin.setRawMode?.(true);
+  process.stdin.resume();
+  process.stdin.on("data", (data) => {
+    ptyProcess.write(data.toString());
+  });
+
+  // After 1 second, write the docker exec command to enter the container
+  setTimeout(() => {
+    ptyProcess.write(`sudo docker exec -it ${sandboxId} /bin/bash\r`);
+  }, 3000);
+}
 
 const writeFileSchema = z.object({
   path: z.string(),
@@ -107,6 +141,8 @@ const executeCommandSchema = z.object({
   sandbox_id: z.string().min(1, "Sandbox ID is required"),
   timeout: z.number().optional(),
 });
+
+//curl http://localhost:8888/api/tools/execute_command -X POST -H "Content-Type: application/json" -d '{"command": "node --version", "sandbox_id": "3uY19TEg8oAaHcl5Y0eH3", "timeout": 1000}'
 app.post(
   "/api/tools/execute_command",
   validateSchema(executeCommandSchema),
@@ -116,66 +152,28 @@ app.post(
   ) => {
     const { command, sandbox_id, timeout } = req.body;
 
-    const port = dockerService.portManager.getPort(sandbox_id);
-    if (!port) {
-      res.status(404).json({ error: "Sandbox not found" });
-      return;
-    }
-
-    async function tryExecuteCommand(port: number): Promise<Response> {
-      const response = await fetch(`http://localhost:${port}/execute_command`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ command, timeout }),
-      });
-
-      return response;
-    }
-
-    // First attempt to get stream
-    let response = await tryExecuteCommand(port);
-    if (!response.ok) {
-      // cannot reach to commander server, try to resume container
-      try {
-        await dockerService.resumeContainer(sandbox_id);
-      } catch (error) {
-        res.status(500).json({ error: "Failed to resume container" });
-        return;
-      }
-      // retry
-      response = await tryExecuteCommand(port);
-      if (!response.ok) {
-        res.status(500).json({ error: "Failed to connect to container" });
-        return;
-      }
-    }
-
-    // Set appropriate headers for streaming
     res.setHeader("Content-Type", "text/plain");
     res.setHeader("Transfer-Encoding", "chunked");
+    res.write("Hello, waiting for command to finish...\n");
+    // Create a listener for the pty output
 
-    // Get the readable stream from the response
-    const reader = response.body?.getReader();
-    if (!reader) {
-      res.status(500).json({ error: "Failed to get reader to stream" });
-      return;
-    }
+    // Attach the listener
+    const listener = ptyProcess.onData((data) => {
+      console.log("stream data", data);
+      res.write(data);
+    });
 
-    // Read the stream chunks and forward them to the client
-    while (true) {
-      const { done, value } = await reader.read();
-
-      if (done) {
-        break;
-      }
-
-      // Forward the chunk to the client
-      res.write(value);
-    }
-
-    res.end();
+    // Write the command
+    setTimeout(() => {
+      ptyProcess.write(`${command}\r`);
+    }, 1000);
+    setTimeout(() => {
+      res.end();
+    }, 5000);
+    // Handle client disconnect
+    // req.on("close", () => {
+    //   listener.dispose();
+    // });
   }
 );
 
