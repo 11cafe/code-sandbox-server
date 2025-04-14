@@ -92,17 +92,23 @@ function createTerminal(sandboxId: string) {
     process.stdout.write(data);
   });
 
-  // Pipe user input to the pty process (like a real terminal)
-  process.stdin.setRawMode?.(true);
-  process.stdin.resume();
-  process.stdin.on("data", (data) => {
-    ptyProcess.write(data.toString());
-  });
+  let buffer = "";
+  let inContainerShell = false;
+  const cleanup = ptyProcess.onData((data) => {
+    buffer += data;
 
-  // After 1 second, write the docker exec command to enter the container
-  setTimeout(() => {
-    ptyProcess.write(`sudo docker exec -it ${sandboxId} /bin/bash\r`);
-  }, 3000);
+    if (buffer.includes("$ ") || buffer.includes("# ")) {
+      // Shell is ready — send the command
+      if (!inContainerShell) {
+        ptyProcess.write(`sudo docker exec -it ${sandboxId} /bin/bash\r`);
+        buffer = ""; // reset if needed
+        inContainerShell = true;
+      } else {
+        ptyProcess.write("ls / \r");
+        cleanup.dispose();
+      }
+    }
+  });
 }
 
 const writeFileSchema = z.object({
