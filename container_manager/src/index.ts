@@ -6,6 +6,7 @@ import express, {
 import { z } from "zod";
 import { DockerService } from "./docker-service";
 import * as pty from "node-pty";
+import { nanoid } from "nanoid";
 
 const app = express();
 const port = 8888;
@@ -58,7 +59,15 @@ const createSandboxSchema = z.object({
   with_file_content: z.string().optional(),
 });
 
-let ptyProcess: pty.IPty;
+type Terminal = {
+  id: string;
+  pty: pty.IPty;
+  status: "initializing" | "ready" | "running";
+  createdAt: number;
+};
+let terminalMap: {
+  [key: string]: Terminal[];
+} = {};
 
 // sudo netstat -tulpn | grep :8888
 // curl http://localhost:8888/api/tools/create_sandbox -X POST -H "Content-Type: application/json" -d '{}'
@@ -71,16 +80,14 @@ app.post(
     res: ExpressResponse
   ) => {
     const sandboxId = await dockerService.createContainer();
-    createTerminal(sandboxId);
     res.json({ id: sandboxId });
   }
 );
 
-function createTerminal(sandboxId: string) {
-  const shell = "bash";
-
+async function createTerminal(sandboxId: string): Promise<Terminal> {
+  await dockerService.ensureContainerRunning(sandboxId);
   // Directly run the container bash as the main process
-  ptyProcess = pty.spawn(
+  const ptyProcess = pty.spawn(
     "sudo",
     ["docker", "exec", "-it", sandboxId, "/bin/bash"],
     {
@@ -91,7 +98,15 @@ function createTerminal(sandboxId: string) {
       env: process.env,
     }
   );
-
+  const terminalId = nanoid();
+  const newTerminal: Terminal = {
+    id: terminalId,
+    pty: ptyProcess,
+    status: "initializing",
+    createdAt: Date.now(),
+  };
+  terminalMap[sandboxId] = terminalMap[sandboxId] || [];
+  terminalMap[sandboxId].push(newTerminal);
   // Pipe terminal output to stdout
   ptyProcess.onData((data) => {
     process.stdout.write(data);
@@ -102,10 +117,16 @@ function createTerminal(sandboxId: string) {
     buffer += data;
     if (buffer.includes("$ ") || buffer.includes("# ")) {
       // Shell is ready — send the command
+      newTerminal.status = "ready";
       buffer = ""; // reset if needed
       cleanup.dispose();
     }
   });
+  while (newTerminal.status !== "ready") {
+    await new Promise((resolve) => setTimeout(resolve, 200));
+  }
+
+  return newTerminal;
 }
 
 const writeFileSchema = z.object({
@@ -154,7 +175,11 @@ app.post(
     res: ExpressResponse
   ) => {
     const { command, sandbox_id, timeout } = req.body;
-
+    let terminal = terminalMap[sandbox_id]?.find((t) => t.status === "ready");
+    if (!terminal) {
+      terminal = await createTerminal(sandbox_id);
+    }
+    const ptyProcess = terminal.pty;
     res.setHeader("Content-Type", "text/plain");
     res.setHeader("Transfer-Encoding", "chunked");
     res.write("Waiting for command to finish...\n");
@@ -166,16 +191,22 @@ app.post(
     let buffer = "";
     // because the SENTINEL would appear twice, first time when command invoked, should be ignored
     let firstSentinelDone = false;
+    terminal.status = "running";
     const listener = ptyProcess.onData((data) => {
       res.write(data);
       buffer += data;
       if (buffer.includes(sentinel)) {
         if (!firstSentinelDone) {
+          // first sentinel, command started
           firstSentinelDone = true;
         } else {
+          // second sentinel, command finished
           res.end();
           listener.dispose();
           buffer = "";
+          setTimeout(() => {
+            terminal.status = "ready";
+          }, 200);
         }
       }
     });

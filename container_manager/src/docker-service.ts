@@ -72,16 +72,19 @@ export class DockerService {
     }
   }
 
-  private async ensureContainerExists(containerId: string): Promise<boolean> {
+  async ensureContainerRunning(containerId: string): Promise<boolean> {
     // sudo docker container inspect -f '{{.State.Running}}' <container_name> => true
-    try {
-      const { stdout } = await execAsync(
-        `sudo docker ps -a --filter "id=${containerId}" --format "{{.ID}}"`
-      );
-      return !!stdout.trim();
-    } catch (error) {
-      return false;
+
+    const { stdout } = await execAsync(
+      `sudo docker container inspect -f '{{.State.Running}}' ${containerId}`
+    );
+    const running = stdout.trim() === "true";
+    console.log(`Container ${containerId} is running: ${running}`);
+
+    if (!running) {
+      await this.createContainer(containerId);
     }
+    return running;
   }
 
   async stopContainer(sandboxId: string) {
@@ -118,8 +121,8 @@ export class DockerService {
     }
   }
 
-  async createContainer(): Promise<string> {
-    const sandboxId = nanoid();
+  async createContainer(existingSandboxId?: string): Promise<string> {
+    const sandboxId = existingSandboxId || nanoid();
 
     const hostWorkspacePath = getContainerWorkspacePath(sandboxId);
     // Create workspace directory on host
