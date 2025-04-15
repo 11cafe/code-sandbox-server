@@ -5,6 +5,7 @@ import * as path from "path";
 import { nanoid } from "nanoid";
 import dotenv from "dotenv";
 import { Readable } from "stream";
+import { Dirent } from "fs";
 
 dotenv.config();
 
@@ -154,39 +155,51 @@ export class DockerService {
 }
 
 export class FileService {
+  getContainerFilePath(containerId: string, filePath: string): string {
+    if (filePath.startsWith("/")) {
+      filePath = filePath.slice(1);
+    }
+    return `${getContainerWorkspacePath(containerId)}/${filePath}`;
+  }
+
   async writeFile(
     containerId: string,
     filePath: string,
     content: string
   ): Promise<void> {
-    const workspacePath = getContainerWorkspacePath(containerId);
-    const fullPath = path.join(workspacePath, filePath);
+    // always use relative path
+    const fullPath = this.getContainerFilePath(containerId, filePath);
 
     // Create directory structure if needed
     await fs.mkdir(path.dirname(fullPath), { recursive: true });
 
     // Write file directly to host filesystem
-    await fs.writeFile(fullPath, content);
+    await fs.writeFile(fullPath, content, "utf-8");
   }
 
   async readFile(containerId: string, filePath: string): Promise<string> {
-    const workspacePath = getContainerWorkspacePath(containerId);
-    const fullPath = path.join(workspacePath, filePath);
+    const fullPath = this.getContainerFilePath(containerId, filePath);
 
-    try {
-      return await fs.readFile(fullPath, "utf-8");
-    } catch (error) {
-      throw new Error(`Failed to read file: ${error}`);
-    }
+    return await fs.readFile(fullPath, "utf-8");
   }
 
-  async listDirectory(containerId: string, dirPath: string): Promise<string[]> {
-    const workspacePath = getContainerWorkspacePath(containerId);
-    const fullPath = path.join(workspacePath, dirPath);
+  async listDirectory(
+    containerId: string,
+    dirPath: string
+  ): Promise<
+    {
+      name: string;
+      type: "file" | "dir";
+    }[]
+  > {
+    const fullPath = this.getContainerFilePath(containerId, dirPath);
 
     try {
-      const files = await fs.readdir(fullPath);
-      return files;
+      const files = await fs.readdir(fullPath, { withFileTypes: true });
+      return files.map((file) => ({
+        name: file.name,
+        type: file.isFile() ? "file" : "dir",
+      }));
     } catch (error) {
       throw new Error(`Failed to list directory: ${error}`);
     }

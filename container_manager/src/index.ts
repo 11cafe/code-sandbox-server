@@ -4,12 +4,12 @@ import express, {
   NextFunction,
 } from "express";
 import { z } from "zod";
-import { DockerService } from "./docker-service";
+import { DockerService, FileService } from "./docker-service";
 import * as pty from "node-pty";
 import { nanoid } from "nanoid";
 
 const app = express();
-const port = 8888;
+const port = process.env.PORT || 8888;
 
 // Middleware
 app.use(express.json());
@@ -109,9 +109,9 @@ async function createTerminal(sandboxId: string): Promise<Terminal> {
   terminalMap[sandboxId] = terminalMap[sandboxId] || [];
   terminalMap[sandboxId].push(newTerminal);
   // Pipe terminal output to stdout
-  ptyProcess.onData((data) => {
-    process.stdout.write(data);
-  });
+  // ptyProcess.onData((data) => {
+  //   process.stdout.write(data);
+  // });
 
   let buffer = "";
   const cleanup = ptyProcess.onData((data) => {
@@ -131,18 +131,29 @@ async function createTerminal(sandboxId: string): Promise<Terminal> {
 }
 
 const writeFileSchema = z.object({
-  path: z.string(),
+  path: z.string().min(1, "File path is required"),
   content: z.string(),
   sandbox_id: z.string().min(1, "Sandbox ID is required"),
 });
 
+const fileService = new FileService();
+
 app.post(
   "/api/tools/write_file",
   validateSchema(writeFileSchema),
-  (req: Request, res: ExpressResponse) => {
+  async (
+    req: Request<{}, {}, z.infer<typeof writeFileSchema>>,
+    res: ExpressResponse
+  ) => {
     // Body is now validated and typed
     const { path, content, sandbox_id } = req.body;
-    res.json({ message: "Welcome to container manager!" });
+    try {
+      await fileService.writeFile(sandbox_id, path, content);
+      res.json({ text: "File written successfully" });
+    } catch (error) {
+      console.error(`Error writing file: ${error}`);
+      res.status(500).json({ error: `Error writing file: ${error}` });
+    }
   }
 );
 
@@ -154,10 +165,36 @@ const readFileSchema = z.object({
 app.post(
   "/api/tools/read_file",
   validateSchema(readFileSchema),
-  (req: Request, res: ExpressResponse) => {
+  async (req: Request, res: ExpressResponse) => {
     // Body is now validated and typed
     const { path, sandbox_id } = req.body;
-    res.json({ message: "Welcome to the Express TypeScript server!" });
+    try {
+      const content = await fileService.readFile(sandbox_id, path);
+      res.json({ text: content });
+    } catch (error) {
+      console.error(`Error reading file: ${error}`);
+      res.status(500).json({ error: `Error reading file: ${error}` });
+    }
+  }
+);
+
+const listDirectorySchema = z.object({
+  path: z.string().min(1, "File path is required"),
+  sandbox_id: z.string().min(1, "Sandbox ID is required"),
+});
+app.post(
+  "/api/tools/list_directory",
+  validateSchema(listDirectorySchema),
+  async (req: Request, res: ExpressResponse) => {
+    // Body is now validated and typed
+    const { path, sandbox_id } = req.body;
+    try {
+      const content = await fileService.listDirectory(sandbox_id, path);
+      res.json({ text: JSON.stringify(content, null, 2) });
+    } catch (error) {
+      console.error(`Error listing directory: ${error}`);
+      res.status(500).json({ error: `Error listing directory: ${error}` });
+    }
   }
 );
 
@@ -175,7 +212,12 @@ app.post(
     req: Request<{}, {}, z.infer<typeof executeCommandSchema>>,
     res: ExpressResponse
   ) => {
-    const { command, sandbox_id, timeout } = req.body;
+    const {
+      command,
+      sandbox_id,
+      timeout = 15 * 1000, // timeout after command running for 15s
+    } = req.body;
+
     let terminal = terminalMap[sandbox_id]?.find((t) => t.status === "ready");
     if (!terminal) {
       try {
@@ -188,9 +230,8 @@ app.post(
       }
     }
     const ptyProcess = terminal.pty;
-    res.setHeader("Content-Type", "text/plain");
-    res.setHeader("Transfer-Encoding", "chunked");
-    res.write("Waiting for command to finish...\n");
+    // res.setHeader("Content-Type", "text/plain");
+    // res.setHeader("Transfer-Encoding", "chunked");
 
     const id = nanoid(4);
     // const sentinel = `__END_${id}__`;
@@ -201,19 +242,37 @@ app.post(
     let buffer = "";
     // because the SENTINEL would appear twice, first time when command invoked, should be ignored
     terminal.status = "running";
+    const timeoutId = setTimeout(() => {
+      if (terminal.status === "running") {
+        res.json({
+          status: "unfinished",
+          output: buffer,
+          terminal_id: terminal.id,
+        });
+        listener.dispose();
+
+        // restart terminal
+        // killTerminal(sandbox_id, terminal.id);
+        // createTerminal(sandbox_id);
+      }
+    }, timeout);
     const listener = ptyProcess.onData((data) => {
-      res.write(data);
+      console.log(data);
+      // res.write(data);
       buffer += data;
       const sentinelCount = (buffer.match(new RegExp(sentinel, "g")) || [])
         .length;
       if (sentinelCount >= 2) {
         // command finished after seeing second sentinel
-        res.end();
+
+        res.json({
+          // status: "finished",
+          text: buffer,
+        });
         listener.dispose();
-        buffer = "";
-        setTimeout(() => {
-          terminal.status = "ready";
-        }, 200);
+        clearTimeout(timeoutId);
+
+        terminal.status = "ready";
       }
     });
     ptyProcess.write(`${wrapped}\r`);
@@ -226,6 +285,17 @@ app.post(
     // });
   }
 );
+
+function killTerminal(sandboxId: string, terminalId: string) {
+  const terminal = terminalMap[sandboxId]?.find((t) => t.id === terminalId);
+  if (terminal) {
+    terminalMap[sandboxId] = terminalMap[sandboxId]?.filter(
+      (t) => t.id !== terminalId
+    );
+    terminal.pty.kill();
+    console.log(`Terminal ${terminalId} killed for ${sandboxId}`);
+  }
+}
 
 // Start server
 app
