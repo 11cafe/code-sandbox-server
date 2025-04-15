@@ -85,7 +85,9 @@ app.post(
 );
 
 async function createTerminal(sandboxId: string): Promise<Terminal> {
+  console.log(`Creating terminal for ${sandboxId}`);
   await dockerService.ensureContainerRunning(sandboxId);
+
   // Directly run the container bash as the main process
   const ptyProcess = pty.spawn(
     "sudo",
@@ -98,9 +100,8 @@ async function createTerminal(sandboxId: string): Promise<Terminal> {
       env: process.env,
     }
   );
-  const terminalId = nanoid();
   const newTerminal: Terminal = {
-    id: terminalId,
+    id: nanoid(),
     pty: ptyProcess,
     status: "initializing",
     createdAt: Date.now(),
@@ -125,7 +126,7 @@ async function createTerminal(sandboxId: string): Promise<Terminal> {
   while (newTerminal.status !== "ready") {
     await new Promise((resolve) => setTimeout(resolve, 200));
   }
-
+  console.log(`Terminal ${newTerminal.id} created for ${sandboxId}`);
   return newTerminal;
 }
 
@@ -166,7 +167,7 @@ const executeCommandSchema = z.object({
   timeout: z.number().optional(),
 });
 
-//curl http://localhost:8888/api/tools/execute_command -X POST -H "Content-Type: application/json" -d '{"command": "node --version", "sandbox_id": "3uY19TEg8oAaHcl5Y0eH3", "timeout": 1000}'
+//curl http://localhost:8888/api/tools/execute_command -X POST -H "Content-Type: application/json" -d '{"command": "node --version", "sandbox_id": "3uY1l5Y0eH3", "timeout": 1000}'
 app.post(
   "/api/tools/execute_command",
   validateSchema(executeCommandSchema),
@@ -177,37 +178,42 @@ app.post(
     const { command, sandbox_id, timeout } = req.body;
     let terminal = terminalMap[sandbox_id]?.find((t) => t.status === "ready");
     if (!terminal) {
-      terminal = await createTerminal(sandbox_id);
+      try {
+        terminal = await createTerminal(sandbox_id);
+      } catch (error) {
+        console.error(`Error creating terminal: ${error}`);
+        return res
+          .status(500)
+          .json({ error: `Error creating terminal: ${error}` });
+      }
     }
     const ptyProcess = terminal.pty;
     res.setHeader("Content-Type", "text/plain");
     res.setHeader("Transfer-Encoding", "chunked");
     res.write("Waiting for command to finish...\n");
 
-    const id = Date.now(); // or generate UUID
-    const sentinel = `__END_${id}__`;
-    const wrapped = `sh -c "${command}; echo ${sentinel}"`;
+    const id = nanoid(4);
+    // const sentinel = `__END_${id}__`;
+    const sentinel = `__END_SIG_${id}__`;
+    const escapedCommand = command.replace(/'/g, `'\\''`);
+    const wrapped = `sh -c '${escapedCommand}; echo ${sentinel}'`;
 
     let buffer = "";
     // because the SENTINEL would appear twice, first time when command invoked, should be ignored
-    let firstSentinelDone = false;
     terminal.status = "running";
     const listener = ptyProcess.onData((data) => {
       res.write(data);
       buffer += data;
-      if (buffer.includes(sentinel)) {
-        if (!firstSentinelDone) {
-          // first sentinel, command started
-          firstSentinelDone = true;
-        } else {
-          // second sentinel, command finished
-          res.end();
-          listener.dispose();
-          buffer = "";
-          setTimeout(() => {
-            terminal.status = "ready";
-          }, 200);
-        }
+      const sentinelCount = (buffer.match(new RegExp(sentinel, "g")) || [])
+        .length;
+      if (sentinelCount >= 2) {
+        // command finished after seeing second sentinel
+        res.end();
+        listener.dispose();
+        buffer = "";
+        setTimeout(() => {
+          terminal.status = "ready";
+        }, 200);
       }
     });
     ptyProcess.write(`${wrapped}\r`);

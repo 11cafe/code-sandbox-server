@@ -72,19 +72,25 @@ export class DockerService {
     }
   }
 
-  async ensureContainerRunning(containerId: string): Promise<boolean> {
+  async ensureContainerRunning(containerId: string) {
     // sudo docker container inspect -f '{{.State.Running}}' <container_name> => true
+    try {
+      const { stdout } = await execAsync(
+        `sudo docker container inspect -f '{{.State.Running}}' ${containerId}`
+      );
 
-    const { stdout } = await execAsync(
-      `sudo docker container inspect -f '{{.State.Running}}' ${containerId}`
-    );
-    const running = stdout.trim() === "true";
-    console.log(`Container ${containerId} is running: ${running}`);
+      const running = stdout.trim() === "true";
+      console.log(`Container ${containerId} is running: ${running}`);
 
-    if (!running) {
+      if (!running) {
+        console.log(`Container ${containerId} is not running, resuming...`);
+        await this.resumeContainer(containerId);
+        console.log(`Container ${containerId} resumed`);
+      }
+    } catch (error) {
+      console.error(`Error checking container ${containerId}: ${error}`);
       await this.createContainer(containerId);
     }
-    return running;
   }
 
   async stopContainer(sandboxId: string) {
@@ -123,6 +129,7 @@ export class DockerService {
 
   async createContainer(existingSandboxId?: string): Promise<string> {
     const sandboxId = existingSandboxId || nanoid();
+    console.log(`Creating container ${sandboxId}`);
 
     const hostWorkspacePath = getContainerWorkspacePath(sandboxId);
     // Create workspace directory on host
@@ -141,7 +148,7 @@ export class DockerService {
     // const containerIP = await this.getContainerIP(sandboxId);
     // await this.updateNginxConfig(sandboxId, containerIP);
 
-    // console.log(`🗂️Container ${sandboxId} created with IP ${containerIP}`);
+    console.log(`🗂️Container ${sandboxId} created`);
     return sandboxId;
   }
 }
