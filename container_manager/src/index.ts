@@ -7,6 +7,7 @@ import { z } from "zod";
 import { DockerService, FileService } from "./docker-service";
 import * as pty from "node-pty";
 import { nanoid } from "nanoid";
+import stripAnsi from "strip-ansi";
 
 const app = express();
 const port = process.env.PORT || 8888;
@@ -21,8 +22,7 @@ const validateSchema = <T extends z.ZodType>(schema: T) => {
 
     if (!result.success) {
       return res.status(400).json({
-        error: "Invalid request parameters",
-        details: result.error.format(),
+        error: "Invalid request parameters: " + result.error.message,
       });
     }
 
@@ -133,7 +133,7 @@ async function createTerminal(sandboxId: string): Promise<Terminal> {
 const writeFileSchema = z.object({
   path: z.string().min(1, "File path is required"),
   content: z.string(),
-  sandbox_id: z.string().min(1, "Sandbox ID is required"),
+  sandbox_id: z.string().optional(),
 });
 
 const fileService = new FileService();
@@ -146,10 +146,15 @@ app.post(
     res: ExpressResponse
   ) => {
     // Body is now validated and typed
-    const { path, content, sandbox_id } = req.body;
     try {
+      let { path, content, sandbox_id } = req.body;
+      if (!sandbox_id) {
+        sandbox_id = await dockerService.createContainer();
+      }
       await fileService.writeFile(sandbox_id, path, content);
-      res.json({ text: "File written successfully" });
+      res.json({
+        text: `${path} written successfully to sandbox_id ${sandbox_id}`,
+      });
     } catch (error) {
       console.error(`Error writing file: ${error}`);
       res.status(500).json({ error: `Error writing file: ${error}` });
@@ -233,9 +238,8 @@ app.post(
     // res.setHeader("Content-Type", "text/plain");
     // res.setHeader("Transfer-Encoding", "chunked");
 
-    const id = nanoid(4);
     // const sentinel = `__END_${id}__`;
-    const sentinel = `__END_SIG_${id}__`;
+    const sentinel = `__END_SIG_${nanoid(2)}__`;
     const escapedCommand = command.replace(/'/g, `'\\''`);
     const wrapped = `sh -c '${escapedCommand}; echo ${sentinel}'`;
 
@@ -246,7 +250,7 @@ app.post(
       if (terminal.status === "running") {
         res.json({
           status: "unfinished",
-          output: buffer,
+          text: stripAnsi(buffer),
           terminal_id: terminal.id,
         });
         listener.dispose();
@@ -257,7 +261,7 @@ app.post(
       }
     }, timeout);
     const listener = ptyProcess.onData((data) => {
-      console.log(data);
+      console.log(stripAnsi(data));
       // res.write(data);
       buffer += data;
       const sentinelCount = (buffer.match(new RegExp(sentinel, "g")) || [])
@@ -267,7 +271,7 @@ app.post(
 
         res.json({
           // status: "finished",
-          text: buffer,
+          text: stripAnsi(buffer),
         });
         listener.dispose();
         clearTimeout(timeoutId);
