@@ -38,8 +38,11 @@ WORKDIR /home
 # node --version v22.14.0
 # python --version 3.12.9
 
-# Expose the port from environment variable
-EXPOSE $PORT
+# install code server
+RUN curl -fsSL https://code-server.dev/install.sh | sh
+
+COPY dist/index.js /server_dist/index.js
+COPY node_modules /server_dist/node_modules
 
 # CMD ["/bin/bash"]
-CMD ["npx", "-y", "linux-commander@latest"]
+CMD ["node", "/server_dist/index.js"]
