@@ -86,8 +86,12 @@ app.post(
 
 async function createTerminal(sandboxId: string): Promise<Terminal> {
   console.log(`Creating terminal for ${sandboxId}`);
+  const startTime = performance.now();
   await dockerService.ensureContainerRunning(sandboxId);
+  const endTime = performance.now();
+  console.log(`ensureContainerRunning took ${(endTime - startTime) / 1000}s`);
 
+  const startTime2 = performance.now();
   // Directly run the container bash as the main process
   const ptyProcess = pty.spawn(
     "sudo",
@@ -126,7 +130,8 @@ async function createTerminal(sandboxId: string): Promise<Terminal> {
   while (newTerminal.status !== "ready") {
     await new Promise((resolve) => setTimeout(resolve, 200));
   }
-  console.log(`Terminal ${newTerminal.id} created for ${sandboxId}`);
+  const endTime2 = performance.now();
+  console.log(`Terminal created took ${(endTime2 - startTime2) / 1000}s`);
   return newTerminal;
 }
 
@@ -153,7 +158,7 @@ app.post(
       }
       await fileService.writeFile(sandbox_id, path, content);
       res.json({
-        text: `${path} written successfully to sandbox_id ${sandbox_id}`,
+        text: `Written successfully to sandbox_id ${sandbox_id}`,
       });
     } catch (error) {
       console.error(error);
@@ -249,9 +254,11 @@ app.post(
     const timeoutId = setTimeout(() => {
       if (terminal.status === "running") {
         res.json({
-          status: "unfinished",
-          text: stripAnsi(buffer),
-          terminal_id: terminal.id,
+          text: `Command not finished running in 15s, you can use terminal_id ${
+            terminal.id
+          } to view the execution output later. Current output: \n ${stripAnsi(
+            buffer
+          )}`,
         });
         listener.dispose();
 
