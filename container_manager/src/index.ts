@@ -156,7 +156,7 @@ app.post(
         text: `${path} written successfully to sandbox_id ${sandbox_id}`,
       });
     } catch (error) {
-      console.error(`Error writing file: ${error}`);
+      console.error(error);
       res.status(500).json({ error: `Error writing file: ${error}` });
     }
   }
@@ -300,6 +300,11 @@ function killTerminal(sandboxId: string, terminalId: string) {
     console.log(`Terminal ${terminalId} killed for ${sandboxId}`);
   }
 }
+
+app.use((err: any, req: Request, res: ExpressResponse, next: NextFunction) => {
+  console.error("Caught error:", err);
+  res.status(500).send(`Something went wrong: ${err}`);
+});
 
 // Start server
 app
