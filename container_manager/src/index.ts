@@ -94,8 +94,8 @@ async function createTerminal(sandboxId: string): Promise<Terminal> {
   const startTime2 = performance.now();
   // Directly run the container bash as the main process
   const ptyProcess = pty.spawn(
-    "sudo",
-    ["docker", "exec", "-it", sandboxId, "/bin/bash"],
+    "docker",
+    ["exec", "-it", sandboxId, "/bin/bash"],
     {
       name: "xterm-color",
       cols: 80,

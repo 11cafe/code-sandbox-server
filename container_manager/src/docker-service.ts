@@ -77,7 +77,7 @@ export class DockerService {
     // sudo docker container inspect -f '{{.State.Running}}' <container_name> => true
     try {
       const { stdout } = await execAsync(
-        `sudo docker container inspect -f '{{.State.Running}}' ${containerId}`
+        `docker container inspect -f '{{.State.Running}}' ${containerId}`
       );
 
       const running = stdout.trim() === "true";
@@ -129,6 +129,7 @@ export class DockerService {
   }
 
   async createContainer(existingSandboxId?: string): Promise<string> {
+    const startTime = performance.now();
     const sandboxId = existingSandboxId || nanoid();
     console.log(`Creating container ${sandboxId}`);
 
@@ -138,7 +139,7 @@ export class DockerService {
 
     // Create workspace directory on host
     await execAsync(
-      `sudo docker run -d \
+      `docker run -d \
         --name ${sandboxId} \
         -v ${hostWorkspacePath}:${CONTAINER_WORKING_DIR} \
         -w ${CONTAINER_WORKING_DIR} \
@@ -149,7 +150,11 @@ export class DockerService {
     // const containerIP = await this.getContainerIP(sandboxId);
     // await this.updateNginxConfig(sandboxId, containerIP);
 
-    console.log(`🗂️Container ${sandboxId} created`);
+    console.log(
+      `🗂️Container ${sandboxId} created in ${
+        (performance.now() - startTime) / 1000
+      }s`
+    );
     return sandboxId;
   }
 }
