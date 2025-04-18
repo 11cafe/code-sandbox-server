@@ -107,7 +107,7 @@ export class DockerService {
   private async getContainerIP(containerId: string): Promise<string> {
     try {
       const { stdout } = await execAsync(
-        `sudo docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' ${containerId}`
+        `docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' ${containerId}`
       );
       return stdout.trim();
     } catch (error) {
@@ -121,7 +121,8 @@ export class DockerService {
   ): Promise<void> {
     try {
       await execAsync(
-        `sudo docker exec nginx-proxy /usr/local/bin/update-nginx.sh ${containerId} ${containerIP}`
+        `docker exec nginx-proxy /usr/local/bin/update-nginx.sh 
+        ${containerId} ${containerIP} ${nanoid(14)}`
       );
     } catch (error) {
       throw new Error(`Failed to update nginx config: ${error}`);
@@ -136,7 +137,7 @@ export class DockerService {
     const hostWorkspacePath = getContainerWorkspacePath(sandboxId);
     // Create workspace directory on host
     await fs.mkdir(hostWorkspacePath, { recursive: true });
-
+    await execAsync(`docker network create ${sandboxId}-network`);
     // Create workspace directory on host
     await execAsync(
       `docker run -d \
@@ -147,8 +148,8 @@ export class DockerService {
     );
 
     // Get container IP and update nginx config
-    // const containerIP = await this.getContainerIP(sandboxId);
-    // await this.updateNginxConfig(sandboxId, containerIP);
+    const containerIP = await this.getContainerIP(sandboxId);
+    await this.updateNginxConfig(sandboxId, containerIP);
 
     console.log(
       `🗂️Container ${sandboxId} created in ${

@@ -3,15 +3,16 @@
 # Get sandbox ID and IP from arguments
 SANDBOX_ID=$1
 CONTAINER_IP=$2
+SERVER_NAME=$3
 
 # Create nginx configuration for the sandbox
 cat > /etc/nginx/conf.d/dynamic/${SANDBOX_ID}.conf << EOF
 server {
     listen 80;
-    server_name sandbox-${SANDBOX_ID};
+    server_name ${SERVER_NAME};
 
     location / {
-        proxy_pass http://${CONTAINER_IP}:8888;
+        proxy_pass http://${CONTAINER_IP}:6666;
         proxy_http_version 1.1;
         proxy_set_header Upgrade \$http_upgrade;
         proxy_set_header Connection 'upgrade';

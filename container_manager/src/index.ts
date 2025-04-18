@@ -153,12 +153,15 @@ app.post(
     // Body is now validated and typed
     try {
       let { path, content, sandbox_id } = req.body;
+      let new_sandbox_created = false;
       if (!sandbox_id) {
         sandbox_id = await dockerService.createContainer();
+        new_sandbox_created = true;
       }
       await fileService.writeFile(sandbox_id, path, content);
       res.json({
         text: `Written successfully to sandbox_id ${sandbox_id}`,
+        new_sandbox_id: new_sandbox_created ? sandbox_id : undefined,
       });
     } catch (error) {
       console.error(error);

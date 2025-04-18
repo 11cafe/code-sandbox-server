@@ -43,6 +43,8 @@ RUN curl -fsSL https://code-server.dev/install.sh | sh
 
 COPY dist/index.js /server_dist/index.js
 COPY node_modules /server_dist/node_modules
+COPY start.sh /start.sh
+RUN chmod +x /start.sh
 
 # CMD ["/bin/bash"]
-CMD ["node", "/server_dist/index.js"]
+CMD ["/start.sh"]
