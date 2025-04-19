@@ -10,7 +10,17 @@ import { nanoid } from "nanoid";
 import stripAnsi from "strip-ansi";
 
 const app = express();
-const port = process.env.PORT || 8888;
+
+const getPortFromArgs = () => {
+  const portArg = process.argv.find((arg) => arg.startsWith("--port="));
+  if (portArg) {
+    const port = parseInt(portArg.split("=")[1]);
+    if (!isNaN(port)) return port;
+  }
+  return null;
+};
+
+const port = getPortFromArgs() || process.env.PORT || 8888;
 
 // Middleware
 app.use(express.json());
