@@ -7,9 +7,10 @@ nginx -v
 
 git clone https://github.com/11cafe/code-sandbox-server.git runbox
 cd runbox
+
 npm install
 npm run build
 
-node dist/src/index.js --port 8888 & 1>./log/runbox.log 2>&1 &
-
-sudo nginx -c ./nginx.conf
+# setup nginx
+chmod +x ./container_manager/update-nginx.sh
+mkdir -p ./nginx/dynamics

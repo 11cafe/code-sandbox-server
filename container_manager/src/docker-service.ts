@@ -64,7 +64,8 @@ class PortManager {
 }
 
 export class DockerService {
-  private static BASE_IMAGE = process.env.BASE_IMAGE;
+  private static BASE_IMAGE = process.env.BASE_IMAGE || "runbox";
+  // private static BASE_IMAGE = "runbox";
   portManager = new PortManager();
 
   constructor() {
@@ -121,8 +122,7 @@ export class DockerService {
   ): Promise<void> {
     try {
       await execAsync(
-        `docker exec nginx-proxy /usr/local/bin/update-nginx.sh 
-        ${containerId} ${containerIP} ${nanoid(14)}`
+        `./update-nginx.sh ${containerId} ${containerIP} ${nanoid(14)}`
       );
     } catch (error) {
       throw new Error(`Failed to update nginx config: ${error}`);
@@ -137,7 +137,7 @@ export class DockerService {
     const hostWorkspacePath = getContainerWorkspacePath(sandboxId);
     // Create workspace directory on host
     await fs.mkdir(hostWorkspacePath, { recursive: true });
-    await execAsync(`docker network create ${sandboxId}-network`);
+    // await execAsync(`docker network create ${sandboxId}-network`);
     // Create workspace directory on host
     await execAsync(
       `docker run -d \
@@ -149,6 +149,7 @@ export class DockerService {
 
     // Get container IP and update nginx config
     const containerIP = await this.getContainerIP(sandboxId);
+    console.log(`IP: ${containerIP} Container ${sandboxId}`);
     await this.updateNginxConfig(sandboxId, containerIP);
 
     console.log(
