@@ -17,57 +17,17 @@ const HOST_MACHINE_RUNBOX_ROOT = "/home/weixuan/runbox";
 function getContainerWorkspacePath(containerId: string): string {
   return path.join(HOST_WORKSPACE_ROOT, containerId);
 }
-
-interface PortMapping {
-  [containerId: string]: number;
-}
-
-class PortManager {
-  private static readonly PORT_RANGE_START = 2001;
-  private static readonly PORT_RANGE_END = 65535;
-  usedPorts: PortMapping = {}; // containerId -> port
-
-  private async isPortAvailable(port: number): Promise<boolean> {
-    try {
-      // Use netstat to check if port is in use
-      await execAsync(`netstat -tuln | grep LISTEN | grep :${port}`);
-      return false; // port is in use
-    } catch (error) {
-      // If command fails (grep finds nothing), port is available
-      return true;
-    }
+const runningContainers: Map<
+  string,
+  {
+    createdAt: number;
+    lastUsedAt: number;
   }
-
-  async allocatePort(containerId: string): Promise<number> {
-    let port = PortManager.PORT_RANGE_START;
-    while (port <= PortManager.PORT_RANGE_END) {
-      // Check if port is used in our mapping
-      if (!Object.values(this.usedPorts).includes(port)) {
-        // Check if port is available in system
-        const isAvailable = await this.isPortAvailable(port);
-        if (isAvailable) {
-          this.usedPorts[containerId] = port;
-          return port;
-        }
-      }
-      port++;
-    }
-    throw new Error("No available ports");
-  }
-
-  getPort(containerId: string): number | undefined {
-    return this.usedPorts[containerId];
-  }
-
-  releasePort(containerId: string): void {
-    delete this.usedPorts[containerId];
-  }
-}
+> = new Map();
 
 export class DockerService {
   private static BASE_IMAGE = process.env.BASE_IMAGE || "runbox";
   // private static BASE_IMAGE = "runbox";
-  portManager = new PortManager();
 
   constructor() {
     if (!DockerService.BASE_IMAGE) {
@@ -98,7 +58,7 @@ export class DockerService {
 
   async stopContainer(sandboxId: string) {
     // Release the port when container is removed
-    this.portManager.releasePort(sandboxId);
+    await execAsync(`sudo docker stop ${sandboxId}`);
     // ... existing container removal code ...
   }
   async resumeContainer(sandboxId: string) {
@@ -143,12 +103,63 @@ export class DockerService {
     return match ? match[1].trim() + ".runbox.ai/?folder=/home" : null;
   }
 
+  async killOldestContainer(maxContainers: number = 3) {
+    try {
+      // Get all running containers with their creation time
+      const { stdout } = await execAsync(
+        `docker ps --format '{{.Names}}\t{{.CreatedAt}}' --filter "ancestor=${DockerService.BASE_IMAGE}"`
+      );
+
+      const containers = stdout
+        .trim()
+        .split("\n")
+        .filter((line) => line) // Filter out empty lines
+        .map((line) => {
+          const [name, createdAt] = line.split("\t");
+          return {
+            name,
+            createdAt: new Date(createdAt).getTime(),
+            lastUsedAt: runningContainers.get(name)?.lastUsedAt ?? 0,
+          };
+        });
+      console.log(
+        "running containers",
+        containers.map((c) => c.name + ": " + c.lastUsedAt)
+      );
+
+      // If we have more containers than the limit
+      if (containers.length > maxContainers) {
+        // Sort by creation time (oldest first)
+        containers.sort((a, b) => a.lastUsedAt - b.lastUsedAt);
+
+        // Get the oldest container
+        const oldestContainer = containers[0];
+
+        // Stop and remove the container
+        await execAsync(`docker stop ${oldestContainer.name}`);
+        // await execAsync(`docker rm ${oldestContainer.id}`);
+
+        console.log(`Killed oldest container ${oldestContainer.name}`);
+        return oldestContainer.name;
+      }
+
+      return null; // Return null if no container needed to be killed
+    } catch (error) {
+      console.error("Error killing oldest container:", error);
+      throw error;
+    }
+  }
+
   async createContainer(existingSandboxId?: string): Promise<{
     sandboxId: string;
     serverName: string;
   }> {
     const startTime = performance.now();
     const sandboxId = existingSandboxId || nanoid();
+    runningContainers.set(sandboxId, {
+      createdAt: Date.now(),
+      lastUsedAt: Date.now(),
+    });
     console.log(`Creating container ${sandboxId}`);
 
     const hostWorkspacePath = getContainerWorkspacePath(sandboxId);
@@ -177,10 +188,21 @@ export class DockerService {
         (performance.now() - startTime) / 1000
       }s`
     );
+    console.log("Killing oldest container async");
+    const startKilling = performance.now();
+    this.killOldestContainer();
+    console.log(
+      `Killed oldest container in ${(performance.now() - startKilling) / 1000}s`
+    );
     return { sandboxId, serverName };
   }
 }
-
+function updateLastUsedTime(containerId: string) {
+  runningContainers.set(containerId, {
+    createdAt: runningContainers.get(containerId)?.createdAt ?? Date.now(),
+    lastUsedAt: Date.now(),
+  });
+}
 export class FileService {
   getContainerFilePath(containerId: string, filePath: string): string {
     if (filePath.startsWith("/")) {
@@ -194,6 +216,7 @@ export class FileService {
     filePath: string,
     content: string
   ): Promise<void> {
+    updateLastUsedTime(containerId);
     // always use relative path
     const fullPath = this.getContainerFilePath(containerId, filePath);
 
@@ -202,9 +225,11 @@ export class FileService {
 
     // Write file directly to host filesystem
     await fs.writeFile(fullPath, content, "utf-8");
+    // Update last used time
   }
 
   async readFile(containerId: string, filePath: string): Promise<string> {
+    updateLastUsedTime(containerId);
     const fullPath = this.getContainerFilePath(containerId, filePath);
 
     return await fs.readFile(fullPath, "utf-8");
@@ -220,7 +245,7 @@ export class FileService {
     }[]
   > {
     const fullPath = this.getContainerFilePath(containerId, dirPath);
-
+    updateLastUsedTime(containerId);
     try {
       const files = await fs.readdir(fullPath, { withFileTypes: true });
       return files.map((file) => ({
