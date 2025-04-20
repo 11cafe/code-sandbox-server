@@ -12,6 +12,7 @@ dotenv.config();
 const execAsync = promisify(exec);
 const HOST_WORKSPACE_ROOT = "/data/workspaces";
 const CONTAINER_WORKING_DIR = "/home";
+const HOST_MACHINE_RUNBOX_ROOT = "/home/weixuan/runbox";
 
 function getContainerWorkspacePath(containerId: string): string {
   return path.join(HOST_WORKSPACE_ROOT, containerId);
@@ -118,18 +119,34 @@ export class DockerService {
 
   private async updateNginxConfig(
     containerId: string,
-    containerIP: string
+    containerIP: string,
+    serverName: string
   ): Promise<void> {
-    try {
-      await execAsync(
-        `./update-nginx.sh ${containerId} ${containerIP} ${nanoid(14)}`
-      );
-    } catch (error) {
-      throw new Error(`Failed to update nginx config: ${error}`);
-    }
+    await execAsync(
+      `./update-nginx.sh ${containerId} ${containerIP} ${serverName}`
+    );
   }
 
-  async createContainer(existingSandboxId?: string): Promise<string> {
+  private getNginxCodeServerConfigPath(sandboxId: string): string {
+    return path.join(
+      HOST_MACHINE_RUNBOX_ROOT,
+      "nginx",
+      "dynamics",
+      `${sandboxId}.conf`
+    );
+  }
+
+  async getContainerCodeServerUrl(sandboxId: string): Promise<string | null> {
+    const configPath = this.getNginxCodeServerConfigPath(sandboxId);
+    const config = await fs.readFile(configPath, "utf-8");
+    const match = config.match(/server_name\s+([^;]+)/);
+    return match ? match[1].trim() + ".runbox.ai/?folder=/home" : null;
+  }
+
+  async createContainer(existingSandboxId?: string): Promise<{
+    sandboxId: string;
+    serverName: string;
+  }> {
     const startTime = performance.now();
     const sandboxId = existingSandboxId || nanoid();
     console.log(`Creating container ${sandboxId}`);
@@ -150,14 +167,15 @@ export class DockerService {
     // Get container IP and update nginx config
     const containerIP = await this.getContainerIP(sandboxId);
     console.log(`IP: ${containerIP} Container ${sandboxId}`);
-    await this.updateNginxConfig(sandboxId, containerIP);
+    const serverName = `sb-${sandboxId}-key-${nanoid(8)}`;
+    await this.updateNginxConfig(sandboxId, containerIP, serverName);
 
     console.log(
       `🗂️Container ${sandboxId} created in ${
         (performance.now() - startTime) / 1000
       }s`
     );
-    return sandboxId;
+    return { sandboxId, serverName };
   }
 }
 

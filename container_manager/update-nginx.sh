@@ -15,10 +15,10 @@ fi
 cat > /home/weixuan/runbox/nginx/dynamics/${SANDBOX_ID}.conf << EOF
 server {
     listen 80;
-    server_name ${SERVER_NAME};
+    server_name ${SERVER_NAME}.runbox.ai;
 
     location / {
-        proxy_pass http://${CONTAINER_IP}:6666;
+        proxy_pass http://${CONTAINER_IP}:6666/;
         proxy_http_version 1.1;
         proxy_set_header Upgrade \$http_upgrade;
         proxy_set_header Connection 'upgrade';

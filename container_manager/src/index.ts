@@ -87,10 +87,13 @@ app.post(
   // validateAuth,
   async (
     req: Request<{}, {}, z.infer<typeof createSandboxSchema>>,
-    res: ExpressResponse
+    res: ExpressResponse<{
+      sandboxId: string;
+      serverName: string;
+    }>
   ) => {
-    const sandboxId = await dockerService.createContainer();
-    res.json({ id: sandboxId });
+    const { sandboxId, serverName } = await dockerService.createContainer();
+    res.json({ sandboxId, serverName });
   }
 );
 
@@ -151,26 +154,51 @@ const writeFileSchema = z.object({
   sandbox_id: z.string().optional(),
 });
 
+const getSandboxUrlSchema = z.object({
+  sandbox_id: z.string().min(1, "Sandbox ID is required"),
+});
+
 const fileService = new FileService();
+app.post(
+  "/api/tools/get_sandbox_editor_url",
+  validateSchema(getSandboxUrlSchema),
+  async (req: Request, res: ExpressResponse) => {
+    const { sandbox_id } = req.body;
+    const url = await dockerService.getContainerCodeServerUrl(sandbox_id);
+    res.json({ url });
+  }
+);
 
 app.post(
   "/api/tools/write_file",
   validateSchema(writeFileSchema),
   async (
     req: Request<{}, {}, z.infer<typeof writeFileSchema>>,
-    res: ExpressResponse
+    res: ExpressResponse<{
+      text?: string;
+      new_sandbox_id?: string;
+      error?: string;
+    }>
   ) => {
     // Body is now validated and typed
     try {
       let { path, content, sandbox_id } = req.body;
       let new_sandbox_created = false;
+      let serverName: string | undefined;
       if (!sandbox_id) {
-        sandbox_id = await dockerService.createContainer();
+        const { sandboxId: newSandboxId, serverName: newServerName } =
+          await dockerService.createContainer();
+        sandbox_id = newSandboxId;
         new_sandbox_created = true;
+        serverName = newServerName;
       }
       await fileService.writeFile(sandbox_id, path, content);
       res.json({
-        text: `Written successfully to sandbox_id ${sandbox_id}`,
+        text:
+          `Written successfully to sandbox_id ${sandbox_id}` +
+          (!!serverName
+            ? ` and inform user to go to http://${serverName}.runbox.ai/?folder=/home to view their sandbox files.`
+            : ""),
         new_sandbox_id: new_sandbox_created ? sandbox_id : undefined,
       });
     } catch (error) {
