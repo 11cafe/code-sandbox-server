@@ -154,12 +154,13 @@ export class DockerService {
     const hostWorkspacePath = getContainerWorkspacePath(sandboxId);
     // Create workspace directory on host
     await fs.mkdir(hostWorkspacePath, { recursive: true });
-    // await execAsync(`docker network create ${sandboxId}-network`);
+    await execAsync(`docker network create ${sandboxId}-network`);
     // Create workspace directory on host
     await execAsync(
       `docker run -d \
         --name ${sandboxId} \
         -v ${hostWorkspacePath}:${CONTAINER_WORKING_DIR} \
+        --network ${sandboxId}-network \
         -w ${CONTAINER_WORKING_DIR} \
         ${DockerService.BASE_IMAGE}`
     );
@@ -167,7 +168,8 @@ export class DockerService {
     // Get container IP and update nginx config
     const containerIP = await this.getContainerIP(sandboxId);
     console.log(`IP: ${containerIP} Container ${sandboxId}`);
-    const serverName = `sb-${sandboxId}-key-${nanoid(8)}`;
+    // const serverName = `sb-${sandboxId}-key-${nanoid(8)}`;
+    const serverName = sandboxId;
     await this.updateNginxConfig(sandboxId, containerIP, serverName);
 
     console.log(

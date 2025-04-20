@@ -1,3 +1,12 @@
+# 1. Create the folder
+sudo mkdir -p /home/runbox
+
+# 2. Change ownership to the current user
+sudo chown "$USER":"$USER" /home/runbox
+
+# 3. (Optional) Set full permissions for the user only (read/write/execute)
+chmod 700 /home/runbox
+
 sudo apt update
 sudo apt install nginx -y
 # echo 'export PATH=$PATH:/usr/sbin' >> ~/.bashrc

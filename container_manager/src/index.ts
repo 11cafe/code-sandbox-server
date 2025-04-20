@@ -194,11 +194,10 @@ app.post(
       }
       await fileService.writeFile(sandbox_id, path, content);
       res.json({
-        text:
-          `Written successfully to sandbox_id ${sandbox_id}` +
-          (!!serverName
-            ? ` and inform user to go to http://${serverName}.runbox.ai/?folder=/home to view their sandbox files.`
-            : ""),
+        text: `Written successfully to sandbox_id ${sandbox_id}`,
+        // (!!serverName
+        //   ? ` and inform user to go to http://${serverName}.runbox.ai/?folder=/home to view their sandbox files.`
+        //   : ""),
         new_sandbox_id: new_sandbox_created ? sandbox_id : undefined,
       });
     } catch (error) {
