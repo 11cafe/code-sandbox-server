@@ -8,7 +8,8 @@ RUN apt-get update && apt-get install -y \
     vim \
     build-essential \
     ca-certificates \
-    && rm -rf /var/lib/apt/lists/*
+    net-tools \
+    && rm -rf /var/lib/apt/lists/* 
 
 # Install Miniconda
 RUN mkdir -p /miniconda3 && \

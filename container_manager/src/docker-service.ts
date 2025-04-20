@@ -2,10 +2,8 @@ import { exec } from "child_process";
 import { promisify } from "util";
 import * as fs from "fs/promises";
 import * as path from "path";
-import { nanoid } from "nanoid";
+import { customAlphabet, nanoid } from "nanoid";
 import dotenv from "dotenv";
-import { Readable } from "stream";
-import { Dirent } from "fs";
 
 dotenv.config();
 
@@ -24,6 +22,10 @@ const runningContainers: Map<
     lastUsedAt: number;
   }
 > = new Map();
+const generateSandboxId = customAlphabet(
+  "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789",
+  21
+);
 
 export class DockerService {
   private static BASE_IMAGE = process.env.BASE_IMAGE || "runbox";
@@ -57,13 +59,38 @@ export class DockerService {
   }
 
   async stopContainer(sandboxId: string) {
-    // Release the port when container is removed
+    // Stop container and remove network
     await execAsync(`sudo docker stop ${sandboxId}`);
-    // ... existing container removal code ...
+    await execAsync(`docker network rm ${sandboxId}-network`).catch((err) => {
+      // Ignore errors if network is already gone
+      console.log(`Failed to remove network for ${sandboxId}: ${err}`);
+    });
   }
+
   async resumeContainer(sandboxId: string) {
-    // Resume the container
-    await execAsync(`sudo docker start ${sandboxId}`);
+    const startTime = performance.now();
+    // Recreate network
+    try {
+      // Check if network exists first it will crash resume by network with name ... already exists
+      await execAsync(`docker network inspect ${sandboxId}-network`);
+      console.log(`Network ${sandboxId}-network already exists`);
+    } catch (error) {
+      // Network doesn't exist, create it
+      await execAsync(`docker network create ${sandboxId}-network`);
+      console.log(`Created network ${sandboxId}-network`);
+    }
+
+    // Start container
+    await execAsync(`docker start ${sandboxId}`);
+
+    // Get new IP and update nginx
+    const containerIP = await this.getContainerIP(sandboxId);
+    await this.updateNginxConfig(sandboxId, containerIP, sandboxId);
+    console.log(
+      `Resumed container ${sandboxId} in ${
+        (performance.now() - startTime) / 1000
+      }s`
+    );
   }
 
   private async getContainerIP(containerId: string): Promise<string> {
@@ -103,6 +130,62 @@ export class DockerService {
     return match ? match[1].trim() + ".runbox.ai/?folder=/home" : null;
   }
 
+  async serveWebsiteAtPort(sandboxId: string, port: number) {
+    try {
+      const result = await execAsync(
+        `docker exec ${sandboxId} sh -c "netstat -tln | grep -E '(0.0.0.0|127.0.0.1|::1|::):.?${port}'"`
+      );
+
+      if (!result) {
+        throw new Error(
+          `No http service found listening on port ${port}. Please make sure your web server is running and listening on ${port}`
+        );
+      }
+
+      // Optional: Check if the port is bound to a proper address
+      const isLocalOnly =
+        result.stdout.includes("127.0.0.1:") || result.stdout.includes("::1:");
+      if (isLocalOnly) {
+        throw new Error(
+          `Service on port ${port} is bound to localhost only. This might cause issues with external access.`
+        );
+      }
+    } catch (error) {
+      throw new Error(
+        `No http service found running on port ${port}. Please make sure your web server is running and listening on ${port}`
+      );
+    }
+
+    const containerIP = await this.getContainerIP(sandboxId);
+    const dynamicNginxConfigPath = path.join(
+      HOST_MACHINE_RUNBOX_ROOT,
+      "nginx",
+      "dynamics",
+      `${sandboxId}-${port}.conf`
+    );
+    await fs.writeFile(
+      dynamicNginxConfigPath,
+      `server {
+    listen 80;
+    server_name ${sandboxId}-${port}.runbox.ai;
+
+    location / {
+        proxy_pass http://${containerIP}:${port}/;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection 'upgrade';
+        proxy_set_header Host $host;
+        proxy_cache_bypass $http_upgrade;
+    }
+}
+`,
+      "utf-8"
+    );
+    await execAsync(
+      `sudo nginx -s reload -c ${HOST_MACHINE_RUNBOX_ROOT}/nginx.conf`
+    );
+  }
+
   async killOldestContainer(maxContainers: number = 3) {
     try {
       // Get all running containers with their creation time
@@ -136,8 +219,7 @@ export class DockerService {
         const oldestContainer = containers[0];
 
         // Stop and remove the container
-        await execAsync(`docker stop ${oldestContainer.name}`);
-        // await execAsync(`docker rm ${oldestContainer.id}`);
+        await this.stopContainer(oldestContainer.name);
 
         console.log(`Killed oldest container ${oldestContainer.name}`);
         return oldestContainer.name;
@@ -155,7 +237,7 @@ export class DockerService {
     serverName: string;
   }> {
     const startTime = performance.now();
-    const sandboxId = existingSandboxId || nanoid();
+    const sandboxId = existingSandboxId || generateSandboxId(16);
     runningContainers.set(sandboxId, {
       createdAt: Date.now(),
       lastUsedAt: Date.now(),
@@ -175,7 +257,7 @@ export class DockerService {
         -w ${CONTAINER_WORKING_DIR} \
         ${DockerService.BASE_IMAGE}`
     );
-
+    // await new Promise((resolve) => setTimeout(resolve, 2000));
     // Get container IP and update nginx config
     const containerIP = await this.getContainerIP(sandboxId);
     console.log(`IP: ${containerIP} Container ${sandboxId}`);

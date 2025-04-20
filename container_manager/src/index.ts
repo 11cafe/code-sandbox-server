@@ -63,12 +63,6 @@ app.get("/", (req: Request, res: ExpressResponse) => {
 
 const dockerService = new DockerService();
 
-// Define schemas for API endpoints
-const createSandboxSchema = z.object({
-  with_file_path: z.string().optional(),
-  with_file_content: z.string().optional(),
-});
-
 type Terminal = {
   id: string;
   pty: pty.IPty;
@@ -79,21 +73,59 @@ let terminalMap: {
   [key: string]: Terminal[];
 } = {};
 
+// Define schemas for API endpoints
+const createSandboxSchema = z.object({
+  // with_file_path: z.string().optional(),
+  // with_file_content: z.string().optional(),
+});
+
 // sudo netstat -tulpn | grep :8888
 // curl http://localhost:8888/api/tools/create_sandbox -X POST -H "Content-Type: application/json" -d '{}'
 app.post(
   "/api/tools/create_sandbox",
-  validateSchema(createSandboxSchema),
+  // validateSchema(createSandboxSchema),
   // validateAuth,
   async (
     req: Request<{}, {}, z.infer<typeof createSandboxSchema>>,
     res: ExpressResponse<{
       sandboxId: string;
       serverName: string;
+      text: string;
     }>
   ) => {
     const { sandboxId, serverName } = await dockerService.createContainer();
-    res.json({ sandboxId, serverName });
+    res.json({
+      sandboxId,
+      serverName,
+      text: `Created sandbox ${sandboxId} And repeat this sentence to user again: Please visit your sandbox editor at http://${serverName}.runbox.ai/?folder=/home`,
+    });
+  }
+);
+
+const serveWebsiteAtPortSchema = z.object({
+  port: z.number().min(1, "Port is required"),
+  sandbox_id: z.string().min(1, "Sandbox ID is required"),
+});
+app.post(
+  "/api/tools/expose_port",
+  validateSchema(serveWebsiteAtPortSchema),
+  // validateAuth,
+  async (
+    req: Request<{}, {}, z.infer<typeof serveWebsiteAtPortSchema>>,
+    res: ExpressResponse<{
+      text: string;
+    }>
+  ) => {
+    try {
+      const { port, sandbox_id } = req.body;
+      await dockerService.serveWebsiteAtPort(sandbox_id, port);
+      res.json({
+        text: `Successfully served website at port ${port} please repeat this sentence to user again: Please visit your website at http://${sandbox_id}-${port}.runbox.ai`,
+      });
+    } catch (error) {
+      console.error(error);
+      res.status(500).json({ text: `Error serving website at port: ${error}` });
+    }
   }
 );
 
@@ -148,20 +180,14 @@ async function createTerminal(sandboxId: string): Promise<Terminal> {
   return newTerminal;
 }
 
-const writeFileSchema = z.object({
-  path: z.string().min(1, "File path is required"),
-  content: z.string(),
-  sandbox_id: z.string().optional(),
-});
-
-const getSandboxUrlSchema = z.object({
+const getSandboxEditorUrlSchema = z.object({
   sandbox_id: z.string().min(1, "Sandbox ID is required"),
 });
 
 const fileService = new FileService();
 app.post(
   "/api/tools/get_sandbox_editor_url",
-  validateSchema(getSandboxUrlSchema),
+  validateSchema(getSandboxEditorUrlSchema),
   async (req: Request, res: ExpressResponse) => {
     const { sandbox_id } = req.body;
     const url = await dockerService.getContainerCodeServerUrl(sandbox_id);
@@ -169,6 +195,11 @@ app.post(
   }
 );
 
+const writeFileSchema = z.object({
+  path: z.string().min(1, "File path is required"),
+  content: z.string(),
+  sandbox_id: z.string(),
+});
 app.post(
   "/api/tools/write_file",
   validateSchema(writeFileSchema),
@@ -262,7 +293,7 @@ app.post(
     req: Request<{}, {}, z.infer<typeof executeCommandSchema>>,
     res: ExpressResponse
   ) => {
-    const {
+    let {
       command,
       sandbox_id,
       timeout = 15 * 1000, // timeout after command running for 15s
@@ -286,6 +317,12 @@ app.post(
     // const sentinel = `__END_${id}__`;
     const sentinel = `__END_SIG_${nanoid(2)}__`;
     const escapedCommand = command.replace(/'/g, `'\\''`);
+    if (command.endsWith("&")) {
+      command = command.slice(0, -1);
+    }
+    if (command.endsWith(";")) {
+      command = command.slice(0, -1);
+    }
     const wrapped = `sh -c '${escapedCommand}; echo ${sentinel}'`;
 
     let buffer = "";

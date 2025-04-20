@@ -23,3 +23,27 @@ npm run build
 # setup nginx
 chmod +x ./container_manager/update-nginx.sh
 mkdir -p ./nginx/dynamics
+
+
+# adding more ips to default address pool otherwise it will consume all ips
+# /etc/docker/daemon.json
+# cat <<EOF > /etc/docker/daemon.json
+# {
+#   "default-address-pools": [
+#     {
+#       "base": "172.17.0.0/16",
+#       "size": 24
+#     },
+#     {
+#       "base": "172.18.0.0/16",
+#       "size": 24
+#     },
+#     {
+#       "base": "172.19.0.0/16",
+#       "size": 24
+#     }
+#   ]
+# }
+# EOF
+
+# sudo systemctl restart docker
