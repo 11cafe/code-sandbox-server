@@ -65,6 +65,7 @@ sudo usermod -aG docker $USER
 # newgrp docker # this will stuck and hang the script here since it creates new shell
 
 docker --version
+docker pull weixuanf/runbox
 
 # adding more ips to default address pool otherwise it will consume all ips
 sudo tee /etc/docker/daemon.json > /dev/null << 'EOF'

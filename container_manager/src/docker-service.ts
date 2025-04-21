@@ -28,7 +28,7 @@ const generateSandboxId = customAlphabet(
 );
 
 export class DockerService {
-  private static BASE_IMAGE = process.env.BASE_IMAGE || "runbox";
+  private static BASE_IMAGE = process.env.BASE_IMAGE || "weixuanf/runbox";
   // private static BASE_IMAGE = "runbox";
 
   constructor() {
