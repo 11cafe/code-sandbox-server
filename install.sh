@@ -37,7 +37,7 @@ npm install
 npm run build
 chmod +x ./update-nginx.sh
 mkdir -p /runbox/nginx/dynamics
-mkdir -p /data/workspaces
+sudo mkdir -p /data/workspaces
 # 3. Set full permissions for the user only (read/write/execute)
 sudo chown "$USER":"$USER" /data
 chmod 700 /data
