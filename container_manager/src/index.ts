@@ -88,16 +88,17 @@ app.post(
   async (
     req: Request<{}, {}, z.infer<typeof createSandboxSchema>>,
     res: ExpressResponse<{
-      sandboxId: string;
-      serverName: string;
+      sandbox_id: string;
+      url: string;
       text: string;
     }>
   ) => {
     const { sandboxId, serverName } = await dockerService.createContainer();
+    const url = `http://${serverName}.runbox.ai/?folder=/home`;
     res.json({
-      sandboxId,
-      serverName,
-      text: `Created sandbox ${sandboxId} And repeat this sentence to user again: Please visit your sandbox editor at http://${serverName}.runbox.ai/?folder=/home`,
+      sandbox_id: sandboxId,
+      url,
+      text: `Created sandbox ${sandboxId} Display this to user again: VIEW YOUR FILE at ${url}`,
     });
   }
 );
@@ -225,7 +226,7 @@ app.post(
       }
       await fileService.writeFile(sandbox_id, path, content);
       res.json({
-        text: `Written successfully to sandbox_id ${sandbox_id}`,
+        text: `Write success. File can be viewed at http://${sandbox_id}.runbox.ai`,
         // (!!serverName
         //   ? ` and inform user to go to http://${serverName}.runbox.ai/?folder=/home to view their sandbox files.`
         //   : ""),
