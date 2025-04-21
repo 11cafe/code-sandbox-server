@@ -25,12 +25,11 @@ curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash -
 sudo apt-get install -y nodejs
 
 # build the project
+cd ./container_manager
 npm install
 npm run build
-
-# setup nginx
-chmod +x ./container_manager/update-nginx.sh
-mkdir -p ./nginx/dynamics
+chmod +x ./update-nginx.sh
+mkdir -p /runbox/nginx/dynamics
 
 # install docker
 # Add Docker's official GPG key:
@@ -46,7 +45,7 @@ echo \
   sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
 sudo apt-get update
 
-sudo apt-get install docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
 
 # make docker cmd avaialable to current user without sudo
 sudo usermod -aG docker $USER
@@ -77,14 +76,11 @@ EOF
 # Restart Docker to apply the changes
 sudo systemctl restart docker
 
-# for adding timestamp to the log
-sudo apt-get install -y moreutils
-
 npm install -g pm2
 
 # START SCRIPT
-mkdir -p ./log
-TZ=UTC pm2 start dist/src/index.js \
+cd /runbox/container_manager
+TZ=UTC pm2 start dist/index.js \
   --name "runbox" \
   --time \
   -- --port 8888
