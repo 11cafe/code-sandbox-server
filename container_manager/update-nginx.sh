@@ -12,7 +12,7 @@ if [ -z "$1" ] || [ -z "$2" ] || [ -z "$3" ]; then
 fi
 
 # Create nginx configuration for the sandbox
-cat > /home/weixuan/runbox/nginx/dynamics/${SANDBOX_ID}.conf << EOF
+cat > /runbox/nginx/dynamics/${SANDBOX_ID}.conf << EOF
 server {
     listen 80;
     server_name ${SERVER_NAME}.runbox.ai;
@@ -33,7 +33,7 @@ EOF
 
 # Reload nginx if configuration is valid
 # sudo nginx -s reload
-sudo nginx -s reload -c /home/weixuan/runbox/nginx.conf
+sudo nginx -s reload -c /runbox/nginx.conf
 #     echo "Nginx configuration updated for sandbox ${SANDBOX_ID}"
 # else
 #     echo "Error in nginx configuration"

@@ -10,7 +10,7 @@ dotenv.config();
 const execAsync = promisify(exec);
 const HOST_WORKSPACE_ROOT = "/data/workspaces";
 const CONTAINER_WORKING_DIR = "/home";
-const HOST_MACHINE_RUNBOX_ROOT = "/home/weixuan/runbox";
+const HOST_MACHINE_RUNBOX_ROOT = "/runbox";
 
 function getContainerWorkspacePath(containerId: string): string {
   return path.join(HOST_WORKSPACE_ROOT, containerId);
