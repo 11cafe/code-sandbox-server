@@ -13,7 +13,7 @@ sudo mkdir -p /runbox
 # 2. Change ownership to the current user
 sudo chown "$USER":"$USER" /runbox
 
-# 3. (Optional) Set full permissions for the user only (read/write/execute)
+# 3. Set full permissions for the user only (read/write/execute)
 chmod 700 /runbox
 
 sudo apt update
@@ -37,6 +37,10 @@ npm install
 npm run build
 chmod +x ./update-nginx.sh
 mkdir -p /runbox/nginx/dynamics
+mkdir -p /data/workspaces
+# 3. Set full permissions for the user only (read/write/execute)
+sudo chown "$USER":"$USER" /data
+chmod 700 /data
 
 # install docker
 # Add Docker's official GPG key:
