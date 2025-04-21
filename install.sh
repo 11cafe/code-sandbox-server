@@ -60,8 +60,9 @@ sudo apt-get update
 sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
 
 # make docker cmd avaialable to current user without sudo
+echo "Adding current user to docker group"
 sudo usermod -aG docker $USER
-newgrp docker
+# newgrp docker # this will stuck and hang the script here since it creates new shell
 
 docker --version
 
@@ -86,11 +87,13 @@ sudo tee /etc/docker/daemon.json > /dev/null << 'EOF'
 EOF
 
 # Restart Docker to apply the changes
+echo "Restarting docker"
 sudo systemctl restart docker
 
 sudo npm install -g pm2
 
 # START SCRIPT
+echo "Starting runbox"
 cd /runbox
 chmod +x start.sh
 ./start.sh
