@@ -83,7 +83,7 @@ EOF
 # Restart Docker to apply the changes
 sudo systemctl restart docker
 
-npm install -g pm2
+sudo npm install -g pm2
 
 # START SCRIPT
 cd /runbox/container_manager
