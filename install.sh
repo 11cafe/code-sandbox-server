@@ -1,6 +1,12 @@
 #!/bin/bash
 set -e  # Exit immediately if a command exits with non-zero status
 
+# Remove the existing /runbox if it exists
+if [ -d "/runbox" ]; then
+    echo "Found existing /runbox directory. Removing it..."
+    sudo rm -rf /runbox
+fi
+
 # 1. Create the folder
 sudo mkdir -p /runbox
 
@@ -25,6 +31,7 @@ curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash -
 sudo apt-get install -y nodejs
 
 # build the project
+sudo apt-get install -y build-essential # for npm install node-pty to work
 cd ./container_manager
 npm install
 npm run build
