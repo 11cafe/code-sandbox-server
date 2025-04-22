@@ -286,6 +286,42 @@ app.post(
   }
 );
 
+const serveStaticWebsiteSchema = z.object({
+  sandbox_id: z.string().min(1, "Sandbox ID is required"),
+});
+app.post(
+  "/api/tools/serve_static_website",
+  validateSchema(serveStaticWebsiteSchema),
+  async (
+    req: Request<{}, {}, z.infer<typeof serveStaticWebsiteSchema>>,
+    res: ExpressResponse
+  ) => {
+    // Body is now validated and typed
+    const { sandbox_id } = req.body;
+
+    const rootDir = getContainerWorkspacePath(sandbox_id);
+    try {
+      await fs.access(rootDir);
+    } catch (error) {
+      res
+        .status(500)
+        .json({ error: `Error: Sandbox ${sandbox_id} does not exist` });
+    }
+    const indexHtmlPath = path.join(rootDir, "index.html");
+    try {
+      await fs.access(indexHtmlPath);
+    } catch (error) {
+      res.status(500).json({
+        error: `Error: Sandbox ${sandbox_id} does not have a index.html file in its project root`,
+      });
+    }
+
+    res.json({
+      text: `Successfully served static website at https://runbox.ai/site/${sandbox_id}`,
+    });
+  }
+);
+
 const executeCommandSchema = z.object({
   command: z.string().min(1, "Command is required"),
   sandbox_id: z.string().min(1, "Sandbox ID is required"),
