@@ -105,12 +105,37 @@ export class DockerService {
   }
 
   private async updateNginxConfig(
-    containerId: string,
+    sandboxId: string,
     containerIP: string,
     serverName: string
   ): Promise<void> {
+    const dynamicNginxConfigPath = path.join(
+      HOST_MACHINE_RUNBOX_ROOT,
+      "nginx",
+      "dynamics",
+      `${sandboxId}.conf`
+    );
+
+    await fs.writeFile(
+      dynamicNginxConfigPath,
+      `server {
+    listen 80;
+    server_name ${serverName}.runbox.ai;
+
+    location / {
+        proxy_pass http://${containerIP}:6666/;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade \$http_upgrade;
+        proxy_set_header Connection 'upgrade';
+        proxy_set_header Host \$host;
+        proxy_cache_bypass \$http_upgrade;
+    }
+}
+`,
+      "utf-8"
+    );
     await execAsync(
-      `./update-nginx.sh ${containerId} ${containerIP} ${serverName}`
+      `sudo nginx -s reload -c ${HOST_MACHINE_RUNBOX_ROOT}/nginx.conf`
     );
   }
 

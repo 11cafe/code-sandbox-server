@@ -2,43 +2,39 @@
 set -e  # Exit immediately if a command exits with non-zero status
 
 # Remove the existing /runbox if it exists
-if [ -d "/runbox" ]; then
-    echo "Found existing /runbox directory. Removing it..."
-    sudo rm -rf /runbox
+if [ -d "/tmp/code-sandbox-server" ]; then
+    echo "Found existing /tmp/code-sandbox-server directory. Removing it..."
+    sudo rm -rf /tmp/code-sandbox-server
 fi
-
-# 1. Create the folder
 sudo mkdir -p /runbox
 
-# 2. Change ownership to the current user
+# Change /runbox ownership to the current user
 sudo chown -R "$USER":"$USER" /runbox
 
-# 3. Set full permissions for the user recursively in /runbox
+# Set full permissions for the user recursively in /runbox
 chmod -R 700 /runbox
 
 sudo apt update
 sudo apt install nginx -y
-# echo 'export PATH=$PATH:/usr/sbin' >> ~/.bashrc
-# source ~/.bashrc
-
 sudo nginx -v
 
-cd /runbox 
-git clone https://github.com/11cafe/code-sandbox-server.git .
+git clone https://github.com/11cafe/code-sandbox-server.git /tmp/code-sandbox-server
 
 # install nodejs
 curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash -
 sudo apt-get install -y nodejs
+sudo apt-get install -y build-essential # for npm install node-pty to work
 
 # build the project
-sudo apt-get install -y build-essential # for npm install node-pty to work
-cd ./container_manager
+cd /tmp/code-sandbox-server/container_manager
 npm install
 npm run build
-chmod +x ./update-nginx.sh
+# move the built dist to /runbox
+mkdir -p /runbox/container_manager
+mv /tmp/code-sandbox-server/container_manager/dist /runbox/container_manager/dist
 mkdir -p /runbox/nginx/dynamics
 
-# 3. Set full permissions for the user recursively in /data
+# Set full permissions for the user recursively in /data
 sudo chown -R "$USER":"$USER" /data
 mkdir -p /data/workspaces
 chmod -R 700 /data
