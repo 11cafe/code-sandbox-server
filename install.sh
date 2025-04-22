@@ -16,6 +16,7 @@ chmod -R 700 /runbox
 
 sudo apt update
 sudo apt install nginx -y
+sudo apt install git -y
 sudo nginx -v
 
 git clone https://github.com/11cafe/code-sandbox-server.git /tmp/code-sandbox-server
