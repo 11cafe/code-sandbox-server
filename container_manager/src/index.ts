@@ -4,10 +4,16 @@ import express, {
   NextFunction,
 } from "express";
 import { z } from "zod";
-import { DockerService, FileService } from "./docker-service";
+import {
+  DockerService,
+  FileService,
+  getContainerWorkspacePath,
+} from "./docker-service";
 import * as pty from "node-pty";
 import { nanoid } from "nanoid";
 import stripAnsi from "strip-ansi";
+import path from "path";
+import fs from "fs/promises";
 
 const app = express();
 
@@ -297,7 +303,7 @@ app.post(
     let {
       command,
       sandbox_id,
-      timeout = 15 * 1000, // timeout after command running for 15s
+      timeout = 10 * 1000, // timeout after command running for 10s
     } = req.body;
 
     let terminal = terminalMap[sandbox_id]?.find((t) => t.status === "ready");
@@ -385,6 +391,47 @@ function killTerminal(sandboxId: string, terminalId: string) {
     console.log(`Terminal ${terminalId} killed for ${sandboxId}`);
   }
 }
+
+import { LRUCache } from "lru-cache";
+
+const staticCache = new LRUCache<string, express.Handler>({
+  max: 5000, // Keep up to 5 000 sandbox middlewares in memory.
+  // how long to live in ms
+  ttl: 1000 * 60 * 30, // 30 min of inactivity
+  allowStale: false, // don’t serve stale entries
+});
+const VALID_ID = /^[A-Za-z0-9_-]+$/; // only allow alphanumeric, underscore, and dash
+
+app.use("/site/:sandboxId", async (req, res, next) => {
+  const { sandboxId } = req.params as { sandboxId: string };
+  console.log(`[${sandboxId}] Request for static file`);
+  if (!VALID_ID.test(sandboxId)) {
+    return res.status(400).send("Invalid Sandbox ID");
+  }
+
+  try {
+    // Resolve & validate workspace path
+    const rootDir = getContainerWorkspacePath(sandboxId);
+    await fs.access(path.join(rootDir, "index.html")); // 404 if it doesn’t exist
+
+    // Look up (or create) cached middleware
+    let handler = staticCache.get(sandboxId);
+    if (!handler) {
+      handler = express.static(rootDir, {
+        index: "index.html",
+        extensions: ["html"],
+        fallthrough: false,
+        immutable: true,
+        maxAge: "1h",
+      });
+      staticCache.set(sandboxId, handler);
+    }
+
+    return handler(req, res, next);
+  } catch {
+    return res.status(404).send("Sandbox does not exist");
+  }
+});
 
 app.use((err: any, req: Request, res: ExpressResponse, next: NextFunction) => {
   console.error("Caught error:", err);

@@ -12,7 +12,7 @@ const HOST_WORKSPACE_ROOT = "/data/workspaces";
 const CONTAINER_WORKING_DIR = "/home";
 const HOST_MACHINE_RUNBOX_ROOT = "/runbox";
 
-function getContainerWorkspacePath(containerId: string): string {
+export function getContainerWorkspacePath(containerId: string): string {
   return path.join(HOST_WORKSPACE_ROOT, containerId);
 }
 const runningContainers: Map<
