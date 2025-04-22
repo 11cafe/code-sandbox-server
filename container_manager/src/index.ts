@@ -8,6 +8,7 @@ import {
   DockerService,
   FileService,
   getContainerWorkspacePath,
+  Terminal,
 } from "./docker-service";
 import * as pty from "node-pty";
 import { nanoid } from "nanoid";
@@ -68,16 +69,7 @@ app.get("/", (req: Request, res: ExpressResponse) => {
 });
 
 const dockerService = new DockerService();
-
-type Terminal = {
-  id: string;
-  pty: pty.IPty;
-  status: "initializing" | "ready" | "running";
-  createdAt: number;
-};
-let terminalMap: {
-  [key: string]: Terminal[];
-} = {};
+const terminalMap = dockerService.terminalMap;
 
 // Define schemas for API endpoints
 const createSandboxSchema = z.object({

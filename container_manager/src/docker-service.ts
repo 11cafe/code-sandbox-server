@@ -4,14 +4,15 @@ import * as fs from "fs/promises";
 import * as path from "path";
 import { customAlphabet, nanoid } from "nanoid";
 import dotenv from "dotenv";
-
+import * as pty from "node-pty";
 dotenv.config();
 
 const execAsync = promisify(exec);
 const HOST_WORKSPACE_ROOT = "/data/workspaces";
 const CONTAINER_WORKING_DIR = "/home";
 const HOST_MACHINE_RUNBOX_ROOT = "/runbox";
-
+const MAX_RUNNING_CONTAINER = 10;
+const MAX_MEMORY_MB_PER_CONTAINER = 500;
 export function getContainerWorkspacePath(containerId: string): string {
   return path.join(HOST_WORKSPACE_ROOT, containerId);
 }
@@ -26,8 +27,18 @@ const generateSandboxId = customAlphabet(
   "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789",
   21
 );
+export type Terminal = {
+  id: string;
+  pty: pty.IPty;
+  status: "initializing" | "ready" | "running";
+  createdAt: number;
+};
 
 export class DockerService {
+  terminalMap: {
+    [key: string]: Terminal[];
+  } = {};
+
   private static BASE_IMAGE = process.env.BASE_IMAGE || "weixuanf/runbox";
   // private static BASE_IMAGE = "runbox";
 
@@ -211,7 +222,7 @@ export class DockerService {
     );
   }
 
-  async killOldestContainer(maxContainers: number = 3) {
+  async killOldestContainer(maxContainers: number = MAX_RUNNING_CONTAINER) {
     try {
       // Get all running containers with their creation time
       const { stdout } = await execAsync(
@@ -246,6 +257,14 @@ export class DockerService {
         // Stop and remove the container
         await this.stopContainer(oldestContainer.name);
 
+        // Kill the terminals
+        const terminal = this.terminalMap[oldestContainer.name];
+        if (terminal) {
+          terminal.forEach((t) => t.pty.kill());
+          delete this.terminalMap[oldestContainer.name];
+          console.log(`Killed all terminals for ${oldestContainer.name}`);
+        }
+
         console.log(`Killed oldest container ${oldestContainer.name}`);
         return oldestContainer.name;
       }
@@ -273,12 +292,13 @@ export class DockerService {
     // Create workspace directory on host
     await fs.mkdir(hostWorkspacePath, { recursive: true });
     await execAsync(`docker network create ${sandboxId}-network`);
-    // Create workspace directory on host
+    // Run container with memory limit 500MB
     await execAsync(
       `docker run -d \
         --name ${sandboxId} \
         -v ${hostWorkspacePath}:${CONTAINER_WORKING_DIR} \
         --network ${sandboxId}-network \
+        --memory=${MAX_MEMORY_MB_PER_CONTAINER}m \
         -w ${CONTAINER_WORKING_DIR} \
         ${DockerService.BASE_IMAGE}`
     );

@@ -30,7 +30,6 @@ sudo apt-get install -y build-essential # for npm install node-pty to work
 mkdir -p /runbox/container_manager
 rm -rf /runbox/container_manager/*  # Add this line to clear existing contents
 cp -r /tmp/code-sandbox-server/container_manager/* /runbox/container_manager/
-# mv /tmp/code-sandbox-server/container_manager /runbox/container_manager
 cd /runbox/container_manager
 npm install
 npm run build
