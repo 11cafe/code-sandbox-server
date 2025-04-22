@@ -35,7 +35,7 @@ cd /runbox/container_manager
 npm install
 npm run build
 
-mv /tmp/code-sandbox-server/nginx.conf /etc/nginx/nginx.conf
+sudo mv /tmp/code-sandbox-server/nginx.conf /etc/nginx/nginx.conf
 mv /tmp/code-sandbox-server/start.sh /runbox/start.sh
 mkdir -p /runbox/nginx/dynamics
 
