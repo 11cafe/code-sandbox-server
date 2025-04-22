@@ -33,6 +33,8 @@ npm run build
 # move the built dist to /runbox
 mkdir -p /runbox/container_manager
 mv /tmp/code-sandbox-server/container_manager/dist /runbox/container_manager/dist
+mv /tmp/code-sandbox-server/nginx.conf /runbox/nginx.conf
+mv /tmp/code-sandbox-server/start.sh /runbox/start.sh
 mkdir -p /runbox/nginx/dynamics
 
 # Set full permissions for the user recursively in /data
