@@ -36,8 +36,8 @@ mv /tmp/code-sandbox-server/container_manager/dist /runbox/container_manager/dis
 mkdir -p /runbox/nginx/dynamics
 
 # Set full permissions for the user recursively in /data
+sudo mkdir -p /data/workspaces
 sudo chown -R "$USER":"$USER" /data
-mkdir -p /data/workspaces
 chmod -R 700 /data
 
 # install docker
