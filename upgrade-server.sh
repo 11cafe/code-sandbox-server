@@ -18,7 +18,7 @@ npm run build
 mkdir -p /runbox/container_manager
 mv /tmp/code-sandbox-server/container_manager/dist /runbox/container_manager/dist
 # move the nginx.conf to /runbox
-mv /tmp/code-sandbox-server/nginx.conf /runbox/nginx.conf
+mv /tmp/code-sandbox-server/nginx.conf /etc/nginx/nginx.conf
 # move the start.sh to /runbox
 mv /tmp/code-sandbox-server/start.sh /runbox/start.sh
 

@@ -5,19 +5,11 @@
 ## Start
 
 ```
-node dist/src/index.js --port 8888 & 1>./log/runbox.log 2>&1 &
-
-sudo nginx -s stop
-
-# start nginx at 80 port
-sudo nginx -c /home/weixuan/runbox/nginx.conf
-
-# to reload nginx config
-sudo nginx -s reload -c /home/weixuan/runbox/nginx.conf
+./start.sh
 ```
 
 ## Reload Nginx Config
 
 ```
-sudo nginx -s reload -c /home/weixuan/runbox/nginx.conf
+sudo nginx -s reload
 ```

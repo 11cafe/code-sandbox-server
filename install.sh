@@ -35,7 +35,7 @@ cd /runbox/container_manager
 npm install
 npm run build
 
-mv /tmp/code-sandbox-server/nginx.conf /runbox/nginx.conf
+mv /tmp/code-sandbox-server/nginx.conf /etc/nginx/nginx.conf
 mv /tmp/code-sandbox-server/start.sh /runbox/start.sh
 mkdir -p /runbox/nginx/dynamics
 
@@ -93,6 +93,11 @@ echo "Restarting docker"
 sudo systemctl restart docker
 
 sudo npm install -g pm2
+
+# install https
+# sudo apt update
+# sudo apt install certbot python3-certbot-nginx -y
+
 
 # START SCRIPT
 echo "Starting runbox"

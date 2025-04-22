@@ -16,7 +16,7 @@ pm2 save
 
 # restart nginx at 80 port
 sudo nginx -s stop
-sudo nginx -c /runbox/nginx.conf
+sudo nginx
 
 # to reload nginx config
-sudo nginx -s reload -c /runbox/nginx.conf
+sudo nginx -s reload

@@ -33,7 +33,7 @@ EOF
 
 # Reload nginx if configuration is valid
 # sudo nginx -s reload
-sudo nginx -s reload -c /runbox/nginx.conf
+sudo nginx -s reload
 #     echo "Nginx configuration updated for sandbox ${SANDBOX_ID}"
 # else
 #     echo "Error in nginx configuration"
