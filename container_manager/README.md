@@ -27,11 +27,11 @@ npm start
 
 The server will be running on http://localhost:3000
 
-## GCP VM Setup
-
-create sandboxes mount dir
+## HTTPS certs setup
 
 ```
-sudo mkdir -p /data/workspaces
-sudo chmod 777 /data/workspaces
+sudo certbot certonly \
+ --manual \
+ --preferred-challenges dns \
+ -d runbox.ai -d '\*.runbox.ai'
 ```
