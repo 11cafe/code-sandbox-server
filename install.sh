@@ -27,13 +27,14 @@ sudo apt-get install -y nodejs
 sudo apt-get install -y build-essential # for npm install node-pty to work
 
 # build the project
-cd /tmp/code-sandbox-server/container_manager
+mkdir -p /runbox/container_manager
+rm -rf /runbox/container_manager/*  # Add this line to clear existing contents
+# cp -r /tmp/code-sandbox-server/container_manager/* /runbox/container_manager/
+mv /tmp/code-sandbox-server/container_manager /runbox/container_manager
+cd /runbox/container_manager
 npm install
 npm run build
-# move the built dist to /runbox
-mkdir -p /runbox/container_manager
-rm -rf /runbox/container_manager/dist
-mv /tmp/code-sandbox-server/container_manager/dist /runbox/container_manager/dist
+
 mv /tmp/code-sandbox-server/nginx.conf /runbox/nginx.conf
 mv /tmp/code-sandbox-server/start.sh /runbox/start.sh
 mkdir -p /runbox/nginx/dynamics
