@@ -17,4 +17,10 @@ npm run build
 # move the built dist to /runbox
 mkdir -p /runbox/container_manager
 mv /tmp/code-sandbox-server/container_manager/dist /runbox/container_manager/dist
-mkdir -p /runbox/nginx/dynamics
+# move the nginx.conf to /runbox
+mv /tmp/code-sandbox-server/nginx.conf /runbox/nginx.conf
+# move the start.sh to /runbox
+mv /tmp/code-sandbox-server/start.sh /runbox/start.sh
+
+# restart the server
+sudo /runbox/start.sh
