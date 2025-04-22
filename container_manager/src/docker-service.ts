@@ -11,7 +11,7 @@ const execAsync = promisify(exec);
 const HOST_WORKSPACE_ROOT = "/data/workspaces";
 const CONTAINER_WORKING_DIR = "/home";
 const HOST_MACHINE_RUNBOX_ROOT = "/runbox";
-const MAX_RUNNING_CONTAINER = 10;
+const MAX_RUNNING_CONTAINER = 2;
 const MAX_MEMORY_MB_PER_CONTAINER = 500;
 export function getContainerWorkspacePath(containerId: string): string {
   return path.join(HOST_WORKSPACE_ROOT, containerId);
@@ -260,7 +260,13 @@ export class DockerService {
         // Kill the terminals
         const terminal = this.terminalMap[oldestContainer.name];
         if (terminal) {
-          terminal.forEach((t) => t.pty.kill());
+          try {
+            terminal.forEach((t) => t.pty.kill());
+          } catch (error) {
+            console.error(
+              `Error killing terminals for ${oldestContainer.name}: ${error}`
+            );
+          }
           delete this.terminalMap[oldestContainer.name];
           console.log(`Killed all terminals for ${oldestContainer.name}`);
         }
