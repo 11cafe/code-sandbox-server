@@ -142,6 +142,26 @@ export class DockerService {
         proxy_cache_bypass \$http_upgrade;
     }
 }
+
+server {
+    listen 443 ssl;
+    server_name ${serverName}.runbox.ai;
+
+    ssl_certificate     /etc/letsencrypt/live/runbox.ai/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/runbox.ai/privkey.pem;
+
+    ssl_protocols       TLSv1.2 TLSv1.3;
+    ssl_ciphers        HIGH:!aNULL:!MD5;
+
+    location / {
+        proxy_pass http://${containerIP}:6666/;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade \$http_upgrade;
+        proxy_set_header Connection 'upgrade';
+        proxy_set_header Host \$host;
+        proxy_cache_bypass \$http_upgrade;
+    }
+}
 `,
       "utf-8"
     );

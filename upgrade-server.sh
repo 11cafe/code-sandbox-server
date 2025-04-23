@@ -17,4 +17,4 @@ npm install
 npm run build
 
 # restart the server gracefully 0 downtime
-pm2 reload
+pm2 reload runbox
