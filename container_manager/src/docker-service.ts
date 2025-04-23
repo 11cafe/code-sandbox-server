@@ -333,7 +333,7 @@ server {
     const containerIP = await this.getContainerIP(sandboxId);
     console.log(`IP: ${containerIP} Container ${sandboxId}`);
     // const serverName = `sb-${sandboxId}-key-${nanoid(8)}`;
-    const serverName = sandboxId;
+    const serverName = sandboxId + "-key-" + nanoid(8);
     await this.updateNginxConfig(sandboxId, containerIP, serverName);
 
     console.log(

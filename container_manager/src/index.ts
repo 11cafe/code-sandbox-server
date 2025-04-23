@@ -314,6 +314,22 @@ app.post(
   }
 );
 
+const getSandboxCodeServerUrlSchema = z.object({
+  sandbox_id: z.string().min(1, "Sandbox ID is required"),
+});
+app.post(
+  "/api/tools/get_sandbox_code_server_url",
+  validateSchema(getSandboxCodeServerUrlSchema),
+  async (req: Request, res: ExpressResponse) => {
+    const { sandbox_id } = req.body;
+    const url = await dockerService.getContainerCodeServerUrl(sandbox_id);
+    res.json({
+      url,
+      text: `Code editor url: ${url}`,
+    });
+  }
+);
+
 const executeCommandSchema = z.object({
   command: z.string().min(1, "Command is required"),
   sandbox_id: z.string().min(1, "Sandbox ID is required"),
