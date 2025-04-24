@@ -1,6 +1,12 @@
 # Linux Sandbox MCP Server
 
-A MCP server that enables LLM to control and command a linux sandbox computer, to execute command, view terminal stdio, write/read files, use browser, etc. Using Docker for container management and Nginx for proxy to let end user to visit the started web service inside sandbox to test website demos AI may write.
+A MCP server that enables LLM to control and command a linux sandbox computer, using Docker for container management and Nginx for proxy to let end user to visit the started web service inside sandbox to test website demos AI may write. I can manipulate the linux sandbox to do:
+- execute commands in terminal
+- view terminal stdio
+- write/read files
+- use browser and view screenshot [upcoming!]
+
+You can view its workspace files in a code editor conveniently too! 
 
 <img width="572" alt="Screenshot 2025-04-24 at 10 02 52 PM" src="https://github.com/user-attachments/assets/4b6e67df-60bd-44f2-8962-d7113bdd1c39" />
 
@@ -25,6 +31,23 @@ In this example, I asked AI to "Create a create a homepage for a cloud service s
 It created 2 html files, and hosted it as a static website and gave me the URL to view it.
 
 ## Install
+Install MCP client:
+
+The MCP client repo is at: https://github.com/11cafe/website-publisher-mcp
+
+```
+{
+  "mcpServers": {
+    "runbox-website-publisher": {
+      "command": "npx",
+      "args": ["-y", "code-sandbox-mcp@latest"]
+    }
+  }
+}
+
+```
+
+Install server:
 
 `./install.sh`
 
